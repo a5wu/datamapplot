@@ -1,10 +1,12 @@
-
-LAYER_ORDER = ['imageLayer', 'dataPointLayer', 'boundaryLayer', 'labelLayer'];
+LAYER_ORDER = ["imageLayer", "dataPointLayer", "boundaryLayer", "labelLayer"];
 
 // There is an effective 100 layer limit of label layers or boundary layers...
 function getLayerIndex(object) {
-  if (object.id.startsWith('labelLayer')) {
-    return LAYER_ORDER.indexOf('labelLayer') + (parseInt(object.id.split('-')[1] / 100));
+  if (object.id.startsWith("labelLayer")) {
+    return (
+      LAYER_ORDER.indexOf("labelLayer") +
+      parseInt(object.id.split("-")[1] / 100)
+    );
   } else {
     return LAYER_ORDER.indexOf(object.id);
   }
@@ -27,7 +29,9 @@ function waitForFont(fontName, maxWait = 500) {
           resolve();
         } else if (Date.now() - startTime > maxWait) {
           clearInterval(interval);
-          reject(new Error(`Font ${fontName} did not load within ${maxWait}ms`));
+          reject(
+            new Error(`Font ${fontName} did not load within ${maxWait}ms`)
+          );
         }
       }, 50);
     }
@@ -41,7 +45,12 @@ function getInitialViewportSize() {
   return { viewportWidth: width, viewportHeight: height };
 }
 
-function calculateZoomLevel(bounds, viewportWidth, viewportHeight, padding = 0.5) {
+function calculateZoomLevel(
+  bounds,
+  viewportWidth,
+  viewportHeight,
+  padding = 0.5
+) {
   // Calculate the range of the bounds
   const lngRange = bounds[1] - bounds[0];
   const latRange = bounds[3] - bounds[2];
@@ -74,13 +83,17 @@ class DataMap {
     this.metaData = null;
     this.layers = [];
     const { viewportWidth, viewportHeight } = getInitialViewportSize();
-    const { zoomLevel, dataCenter } = calculateZoomLevel(bounds, viewportWidth, viewportHeight);
+    const { zoomLevel, dataCenter } = calculateZoomLevel(
+      bounds,
+      viewportWidth,
+      viewportHeight
+    );
     this.deckgl = new deck.DeckGL({
       container: container,
       initialViewState: {
         latitude: dataCenter[1],
         longitude: dataCenter[0],
-        zoom: zoomLevel
+        zoom: zoomLevel,
       },
       controller: { scrollZoom: { speed: 0.01, smooth: true } },
     });
@@ -88,16 +101,19 @@ class DataMap {
     this.dataSelectionManager = new DataSelectionManager(lassoSelectionItemId);
   }
 
-  addPoints(pointData, {
-    pointSize,
-    pointOutlineColor = [250, 250, 250, 128],
-    pointLineWidth = 0.001,
-    pointHoverColor = [170, 0, 0, 187],
-    pointLineWidthMaxPixels = 3,
-    pointLineWidthMinPixels = 0.001,
-    pointRadiusMaxPixels = 16,
-    pointRadiusMinPixels = 0.2,
-  }) {
+  addPoints(
+    pointData,
+    {
+      pointSize,
+      pointOutlineColor = [250, 250, 250, 128],
+      pointLineWidth = 0.001,
+      pointHoverColor = [170, 0, 0, 187],
+      pointLineWidthMaxPixels = 3,
+      pointLineWidthMinPixels = 0.001,
+      pointRadiusMaxPixels = 16,
+      pointRadiusMinPixels = 0.2,
+    }
+  ) {
     // Parse out and reformat data for deck.gl
     const numPoints = pointData.x.length;
     const positions = new Float32Array(numPoints * 2);
@@ -133,44 +149,52 @@ class DataMap {
     this.pointRadiusMaxPixels = pointRadiusMaxPixels;
     this.pointRadiusMinPixels = pointRadiusMinPixels;
 
-    let scatterAttributes = {
+    let iconAttributes = {
       getPosition: { value: positions, size: 2 },
-      getFillColor: { value: colors, size: 4 },
-      getFilterValue: { value: this.selected, size: 1 }
+      getColor: { value: colors, size: 4 },
+      getFilterValue: { value: this.selected, size: 1 },
     };
+
     if (variableSize) {
-      scatterAttributes.getRadius = { value: sizes, size: 1 };
+      iconAttributes.getSize = { value: sizes, size: 1 };
     }
 
-    this.pointLayer = new deck.ScatterplotLayer({
-      id: 'dataPointLayer',
+    // Use IconLayer instead of ScatterplotLayer
+    this.pointLayer = new deck.IconLayer({
+      id: "dataPointLayer",
       data: {
         length: numPoints,
-        attributes: scatterAttributes
+        attributes: iconAttributes,
       },
-      getRadius: this.pointSize,
-      getLineColor: this.pointOutlineColor,
-      getLineWidth: this.pointLineWidth,
-      highlightColor: this.pointHoverColor,
-      lineWidthMaxPixels: this.pointLineWidthMaxPixels,
-      lineWidthMinPixels: this.pointLineWidthMinPixels,
-      radiusMaxPixels: this.pointRadiusMaxPixels,
-      radiusMinPixels: this.pointRadiusMinPixels,
-      radiusUnits: "common",
-      lineWidthUnits: "common",
-      autoHighlight: true,
+      // Use a simple SVG circle as the icon instead of a complex PNG
+      iconAtlas:
+        'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="blue" opacity="0.7"/></svg>',
+      iconMapping: {
+        marker: {
+          x: 0,
+          y: 0,
+          width: 64,
+          height: 64,
+          anchorX: 32,
+          anchorY: 32,
+        },
+      },
+      getIcon: (d) => "marker",
+      getSize: variableSize ? (d) => d.size * 24 : pointSize * 24, // Scale the size appropriately
+      sizeScale: 1,
+      sizeMinPixels: this.pointRadiusMinPixels * 2,
+      sizeMaxPixels: this.pointRadiusMaxPixels * 2,
       pickable: true,
-      stroked: true,
       extensions: [new deck.DataFilterExtension({ filterSize: 1 })],
       filterRange: [-0.5, 1.5],
       filterSoftRange: [0.75, 1.25],
       updateTriggers: {
-        getFilterValue: this.updateTriggerCounter  // We'll increment this to trigger updates
+        getFilterValue: this.updateTriggerCounter, // We'll increment this to trigger updates
       },
       instanceCount: numPoints,
       parameters: {
-        depthTest: false
-      }
+        depthTest: false,
+      },
     });
 
     this.layers.push(this.pointLayer);
@@ -178,21 +202,23 @@ class DataMap {
     this.deckgl.setProps({ layers: [...this.layers] });
   }
 
-  addLabels(labelData, {
-    labelTextColor = d => [d.r, d.g, d.b, d.a],
-    textMinPixelSize = 18,
-    textMaxPixelSize = 36,
-    textOutlineWidth = 8,
-    textOutlineColor = [238, 238, 238, 221],
-    textBackgroundColor = [255, 255, 255, 64],
-    fontFamily = "Roboto",
-    minFontWeight = 100,
-    maxFontWeight = 900,
-    lineSpacing = 0.95,
-    textCollisionSizeScale = 3.0,
-    pickable = true,
-  }) {
-    
+  addLabels(
+    labelData,
+    {
+      labelTextColor = (d) => [d.r, d.g, d.b, d.a],
+      textMinPixelSize = 18,
+      textMaxPixelSize = 36,
+      textOutlineWidth = 8,
+      textOutlineColor = [238, 238, 238, 221],
+      textBackgroundColor = [255, 255, 255, 64],
+      fontFamily = "Roboto",
+      minFontWeight = 100,
+      maxFontWeight = 900,
+      lineSpacing = 0.95,
+      textCollisionSizeScale = 3.0,
+      pickable = true,
+    }
+  ) {
     const numLabels = labelData.length;
     this.labelTextColor = labelTextColor;
     this.textMinPixelSize = textMinPixelSize;
@@ -205,9 +231,9 @@ class DataMap {
     this.maxFontWeight = maxFontWeight;
     this.lineSpacing = lineSpacing;
     this.textCollisionSizeScale = textCollisionSizeScale;
-    this.numLabelLayers = Math.max(...labelData.map(d => d.layer));
+    this.numLabelLayers = Math.max(...labelData.map((d) => d.layer));
 
-    const maxSize = Math.max(...labelData.map(d => d.size));
+    const maxSize = Math.max(...labelData.map((d) => d.size));
 
     waitForFont(this.fontFamily);
 
@@ -216,56 +242,55 @@ class DataMap {
 
     this.labelLayers = [];
     for (let i = 0; i <= this.numLabelLayers; i++) {
-
       const weight = minFontWeight + (weightRange / this.numLabelLayers) * i;
       const layerData = labelData
-        .filter(d => (d.layer >= i))
-        .map(
-          d => ({ 
-            x: d.x, 
-            y: d.y, 
-            label: d.label, 
-            size: d.size, 
-            r: d.r, 
-            g: d.g, 
-            b: d.b, 
-            a: d.layer == i ? 255 : 0,
-            visible: d.layer === i,
-          })
-        )
+        .filter((d) => d.layer >= i)
+        .map((d) => ({
+          x: d.x,
+          y: d.y,
+          label: d.label,
+          size: d.size,
+          r: d.r,
+          g: d.g,
+          b: d.b,
+          a: d.layer == i ? 255 : 0,
+          visible: d.layer === i,
+        }));
       this.labelLayers.push(
         new deck.TextLayer({
           id: `labelLayer-${i}`,
           data: layerData,
           pickable: false,
-          getPosition: d => [d.x, d.y],
-          getText: d => d.label,
+          getPosition: (d) => [d.x, d.y],
+          getText: (d) => d.label,
           getColor: this.labelTextColor,
-          getSize: d => d.size,
+          getSize: (d) => d.size,
           sizeScale: 1,
           sizeMinPixels: this.textMinPixelSize,
           sizeMaxPixels: this.textMaxPixelSize,
           outlineWidth: this.textOutlineWidth,
           outlineColor: this.textOutlineColor,
-          getBackgroundColor: d => (d.visible ? this.textBackgroundColor : [0, 0, 0, 0]),
+          getBackgroundColor: (d) =>
+            d.visible ? this.textBackgroundColor : [0, 0, 0, 0],
           getBackgroundPadding: [15, 15, 15, 15],
           background: true,
           characterSet: "auto",
           fontFamily: this.fontFamily,
           fontWeight: weight,
           lineHeight: this.lineSpacing,
-          fontSettings: { "sdf": true },
+          fontSettings: { sdf: true },
           getTextAnchor: "middle",
           getAlignmentBaseline: "center",
           lineHeight: 0.95,
           // elevation: 100,
           // CollideExtension options
           collisionEnabled: true,
-          getCollisionPriority: d => d.size + i,
+          getCollisionPriority: (d) => d.size + i,
           alphaCutoff: -1,
           collisionGroup: `LabelGroup${i}`,
           collisionTestProps: {
-            sizeScale: this.textCollisionSizeScale * (2 + this.numLabelLayers - i),
+            sizeScale:
+              this.textCollisionSizeScale * (2 + this.numLabelLayers - i),
             sizeMaxPixels: 2 * this.textMaxPixelSize + 5,
             sizeMinPixels: 2 * this.textMinPixelSize + 5,
             getBackgroundPadding: [30, 30, 30, 30],
@@ -273,8 +298,8 @@ class DataMap {
           extensions: [collisionFilter],
           instanceCount: numLabels,
           parameters: {
-            depthTest: false
-          }
+            depthTest: false,
+          },
         })
       );
     }
@@ -290,22 +315,22 @@ class DataMap {
     this.clusterBoundaryLineWidth = clusterBoundaryLineWidth;
 
     this.boundaryLayer = new deck.PolygonLayer({
-      id: 'boundaryLayer',
+      id: "boundaryLayer",
       data: boundaryData,
       stroked: true,
       filled: false,
-      getLineColor: d => [d.r, d.g, d.b, d.a],
-      getPolygon: d => d.polygon,
+      getLineColor: (d) => [d.r, d.g, d.b, d.a],
+      getPolygon: (d) => d.polygon,
       lineWidthUnits: "common",
-      getLineWidth: d => d.size * d.size,
+      getLineWidth: (d) => d.size * d.size,
       lineWidthScale: this.clusterBoundaryLineWidth * 5e-5,
       lineJointRounded: true,
       lineWidthMaxPixels: 4,
       lineWidthMinPixels: 0.0,
       instanceCount: numBoundaries,
       parameters: {
-        depthTest: false
-      }
+        depthTest: false,
+      },
     });
 
     this.layers.push(this.boundaryLayer);
@@ -313,19 +338,21 @@ class DataMap {
     this.deckgl.setProps({ layers: [...this.layers] });
   }
 
-  addMetaData(metaData, {
-    tooltipFunction = ({ index }) => this.metaData.hover_text[index],
-    onClickFunction = null,
-    searchField = null,
-
-  }) {
+  addMetaData(
+    metaData,
+    {
+      tooltipFunction = ({ index }) => this.metaData.hover_text[index],
+      onClickFunction = null,
+      searchField = null,
+    }
+  ) {
     this.metaData = metaData;
     this.tooltipFunction = tooltipFunction;
     this.onClickFunction = onClickFunction;
     this.searchField = searchField;
 
     // If hover_text is present, add a tooltip
-    if (this.metaData.hasOwnProperty('hover_text')) {
+    if (this.metaData.hasOwnProperty("hover_text")) {
       this.deckgl.setProps({
         getTooltip: this.tooltipFunction,
       });
@@ -339,7 +366,9 @@ class DataMap {
 
     //  if search is enabled, add search data array
     if (this.searchField) {
-      this.searchArray = this.metaData[this.searchField].map(d => d.toLowerCase());
+      this.searchArray = this.metaData[this.searchField].map((d) =>
+        d.toLowerCase()
+      );
     }
   }
 
@@ -350,12 +379,12 @@ class DataMap {
 
   addBackgroundImage(image, bounds) {
     this.imageLayer = new deck.BitmapLayer({
-      id: 'imageLayer',
+      id: "imageLayer",
       bounds: bounds,
       image: image,
       parameters: {
-        depthTest: false
-      }
+        depthTest: false,
+      },
     });
 
     this.layers.push(this.imageLayer);
@@ -363,16 +392,22 @@ class DataMap {
     this.deckgl.setProps({ layers: [...this.layers] });
   }
 
-  async addSelectionHandler(callback, selectionKind = "lasso-selection", timeoutMs = 60000) {
+  async addSelectionHandler(
+    callback,
+    selectionKind = "lasso-selection",
+    timeoutMs = 60000
+  ) {
     const startTime = Date.now();
 
     if (selectionKind === "lasso-selection") {
       // Wait for the lasso selector to be available
       while (!this.lassoSelector) {
         if (Date.now() - startTime > timeoutMs) {
-          throw new Error('Timeout: lassoSelector did not become available within the specified timeout period');
+          throw new Error(
+            "Timeout: lassoSelector did not become available within the specified timeout period"
+          );
         }
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
       this.lassoSelector.registerSelectionHandler(callback);
@@ -389,7 +424,8 @@ class DataMap {
 
   highlightPoints(itemId) {
     const selectedIndices = this.dataSelectionManager.getSelectedIndices();
-    const semiSelectedIndices = this.dataSelectionManager.getBasicSelectedIndices();
+    const semiSelectedIndices =
+      this.dataSelectionManager.getBasicSelectedIndices();
     const hasSelectedIndices = selectedIndices.size !== 0;
     const hasSemiSelectedIndices = semiSelectedIndices.size !== 0;
     const hasLassoSelection = this.dataSelectionManager.hasSpecialSelection();
@@ -424,27 +460,36 @@ class DataMap {
     // Increment update trigger
     this.updateTriggerCounter++;
 
-    const sizeAdjust = 1 / (1 + (Math.sqrt(selectedIndices.size) / Math.log2(this.selected.length)));
+    const sizeAdjust =
+      1 /
+      (1 + Math.sqrt(selectedIndices.size) / Math.log2(this.selected.length));
 
     const updatedPointLayer = this.pointLayer.clone({
       data: {
         ...this.pointLayer.props.data,
         attributes: {
           ...this.pointLayer.props.data.attributes,
-          getFilterValue: { value: this.selected, size: 1 }
-        }
+          getFilterValue: { value: this.selected, size: 1 },
+        },
       },
-      radiusMinPixels: hasSelectedIndices ? 2 * (this.pointRadiusMinPixels + sizeAdjust) : this.pointRadiusMinPixels,
+      // Update for IconLayer - increase size for selected points
+      sizeMinPixels: hasSelectedIndices
+        ? 2 * (this.pointRadiusMinPixels * 2 + sizeAdjust)
+        : this.pointRadiusMinPixels * 2,
       updateTriggers: {
         getFilterValue: this.updateTriggerCounter,
-        radiusMinPixels: this.updateTriggerCounter,
-      }
+        sizeMinPixels: this.updateTriggerCounter, // Changed from radiusMinPixels to sizeMinPixels for IconLayer
+      },
     });
 
     const idx = this.layers.indexOf(this.pointLayer);
-    this.layers = [...this.layers.slice(0, idx), updatedPointLayer, ...this.layers.slice(idx + 1)];
+    this.layers = [
+      ...this.layers.slice(0, idx),
+      updatedPointLayer,
+      ...this.layers.slice(idx + 1),
+    ];
     this.deckgl.setProps({
-      layers: this.layers
+      layers: this.layers,
     });
     this.pointLayer = updatedPointLayer;
 
@@ -459,11 +504,16 @@ class DataMap {
   }
 
   addSelection(selectedIndices, selectionKind) {
-    this.dataSelectionManager.addOrUpdateSelectedIndicesOfItem(selectedIndices, selectionKind);
+    this.dataSelectionManager.addOrUpdateSelectedIndicesOfItem(
+      selectedIndices,
+      selectionKind
+    );
     this.highlightPoints(selectionKind);
 
     if (this.selectionCallbacks && this.selectionCallbacks[selectionKind]) {
-      const currentSelectedIndices = Array.from(this.dataSelectionManager.getSelectedIndices());
+      const currentSelectedIndices = Array.from(
+        this.dataSelectionManager.getSelectedIndices()
+      );
       for (let callback of this.selectionCallbacks[selectionKind]) {
         callback(currentSelectedIndices);
       }
@@ -475,7 +525,9 @@ class DataMap {
     this.highlightPoints(selectionKind);
 
     if (this.selectionCallbacks && this.selectionCallbacks[selectionKind]) {
-      const currentSelectedIndices = Array.from(this.dataSelectionManager.getSelectedIndices());
+      const currentSelectedIndices = Array.from(
+        this.dataSelectionManager.getSelectedIndices()
+      );
       for (let callback of this.selectionCallbacks[selectionKind]) {
         callback(currentSelectedIndices);
       }
@@ -497,10 +549,15 @@ class DataMap {
     if (searchTerm === "") {
       this.dataSelectionManager.removeSelectedIndicesOfItem(this.searchItemId);
     } else {
-      this.dataSelectionManager.addOrUpdateSelectedIndicesOfItem(selectedIndices, this.searchItemId);
+      this.dataSelectionManager.addOrUpdateSelectedIndicesOfItem(
+        selectedIndices,
+        this.searchItemId
+      );
     }
     if (this.selectionCallbacks && this.selectionCallbacks[this.searchItemId]) {
-      const currentSelectedIndices = Array.from(this.dataSelectionManager.getSelectedIndices());
+      const currentSelectedIndices = Array.from(
+        this.dataSelectionManager.getSelectedIndices()
+      );
       for (let callback of this.selectionCallbacks[this.searchItemId]) {
         callback(currentSelectedIndices);
       }
@@ -526,24 +583,28 @@ class DataMap {
         ...this.pointLayer.props.data,
         attributes: {
           ...this.pointLayer.props.data.attributes,
-          getFillColor: { value: this[`${fieldName}Colors`], size: 4 }
-        }
+          getColor: { value: this[`${fieldName}Colors`], size: 4 },
+        },
       },
       transitions: {
-        getFillColor: {
+        getColor: {
           duration: 1500,
-          easing: d3.easeCubicInOut
-        }
-      }
+          easing: d3.easeCubicInOut,
+        },
+      },
     });
-    
+
     // Increment update trigger
     this.updateTriggerCounter++;
 
     const idx = this.layers.indexOf(this.pointLayer);
-    this.layers = [...this.layers.slice(0, idx), updatedPointLayer, ...this.layers.slice(idx + 1)];
+    this.layers = [
+      ...this.layers.slice(0, idx),
+      updatedPointLayer,
+      ...this.layers.slice(idx + 1),
+    ];
     this.deckgl.setProps({
-      layers: this.layers
+      layers: this.layers,
     });
     this.pointLayer = updatedPointLayer;
   }
@@ -554,24 +615,28 @@ class DataMap {
         ...this.pointLayer.props.data,
         attributes: {
           ...this.pointLayer.props.data.attributes,
-          getFillColor: { value: this.originalColors, size: 4 }
-        }
+          getColor: { value: this.originalColors, size: 4 },
+        },
       },
       transitions: {
-        getFillColor: {
+        getColor: {
           duration: 1500,
-          easing: d3.easeCubicInOut
-        }
-      }
+          easing: d3.easeCubicInOut,
+        },
+      },
     });
-    
+
     // Increment update trigger
     this.updateTriggerCounter++;
 
     const idx = this.layers.indexOf(this.pointLayer);
-    this.layers = [...this.layers.slice(0, idx), updatedPointLayer, ...this.layers.slice(idx + 1)];
+    this.layers = [
+      ...this.layers.slice(0, idx),
+      updatedPointLayer,
+      ...this.layers.slice(idx + 1),
+    ];
     this.deckgl.setProps({
-      layers: this.layers
+      layers: this.layers,
     });
     this.pointLayer = updatedPointLayer;
   }
