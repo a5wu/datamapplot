@@ -149,42 +149,34 @@ class DataMap {
     this.pointRadiusMaxPixels = pointRadiusMaxPixels;
     this.pointRadiusMinPixels = pointRadiusMinPixels;
 
-    let iconAttributes = {
+    let scatterAttributes = {
       getPosition: { value: positions, size: 2 },
-      getColor: { value: colors, size: 4 },
+      getFillColor: { value: colors, size: 4 },
       getFilterValue: { value: this.selected, size: 1 },
     };
-
     if (variableSize) {
-      iconAttributes.getSize = { value: sizes, size: 1 };
+      scatterAttributes.getRadius = { value: sizes, size: 1 };
     }
 
-    // Use IconLayer instead of ScatterplotLayer
-    this.pointLayer = new deck.IconLayer({
+    this.pointLayer = new deck.ScatterplotLayer({
       id: "dataPointLayer",
       data: {
         length: numPoints,
-        attributes: iconAttributes,
+        attributes: scatterAttributes,
       },
-      // Use a simple SVG circle as the icon instead of a complex PNG
-      iconAtlas:
-        'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64"><circle cx="32" cy="32" r="30" fill="blue" opacity="0.7"/></svg>',
-      iconMapping: {
-        marker: {
-          x: 0,
-          y: 0,
-          width: 64,
-          height: 64,
-          anchorX: 32,
-          anchorY: 32,
-        },
-      },
-      getIcon: (d) => "marker",
-      getSize: variableSize ? (d) => d.size * 24 : pointSize * 24, // Scale the size appropriately
-      sizeScale: 1,
-      sizeMinPixels: this.pointRadiusMinPixels * 2,
-      sizeMaxPixels: this.pointRadiusMaxPixels * 2,
+      getRadius: this.pointSize,
+      getLineColor: this.pointOutlineColor,
+      getLineWidth: this.pointLineWidth,
+      highlightColor: this.pointHoverColor,
+      lineWidthMaxPixels: this.pointLineWidthMaxPixels,
+      lineWidthMinPixels: this.pointLineWidthMinPixels,
+      radiusMaxPixels: this.pointRadiusMaxPixels,
+      radiusMinPixels: this.pointRadiusMinPixels,
+      radiusUnits: "common",
+      lineWidthUnits: "common",
+      autoHighlight: true,
       pickable: true,
+      stroked: true,
       extensions: [new deck.DataFilterExtension({ filterSize: 1 })],
       filterRange: [-0.5, 1.5],
       filterSoftRange: [0.75, 1.25],
@@ -472,13 +464,12 @@ class DataMap {
           getFilterValue: { value: this.selected, size: 1 },
         },
       },
-      // Update for IconLayer - increase size for selected points
-      sizeMinPixels: hasSelectedIndices
-        ? 2 * (this.pointRadiusMinPixels * 2 + sizeAdjust)
-        : this.pointRadiusMinPixels * 2,
+      radiusMinPixels: hasSelectedIndices
+        ? 2 * (this.pointRadiusMinPixels + sizeAdjust)
+        : this.pointRadiusMinPixels,
       updateTriggers: {
         getFilterValue: this.updateTriggerCounter,
-        sizeMinPixels: this.updateTriggerCounter, // Changed from radiusMinPixels to sizeMinPixels for IconLayer
+        radiusMinPixels: this.updateTriggerCounter,
       },
     });
 
@@ -583,11 +574,11 @@ class DataMap {
         ...this.pointLayer.props.data,
         attributes: {
           ...this.pointLayer.props.data.attributes,
-          getColor: { value: this[`${fieldName}Colors`], size: 4 },
+          getFillColor: { value: this[`${fieldName}Colors`], size: 4 },
         },
       },
       transitions: {
-        getColor: {
+        getFillColor: {
           duration: 1500,
           easing: d3.easeCubicInOut,
         },
@@ -615,11 +606,11 @@ class DataMap {
         ...this.pointLayer.props.data,
         attributes: {
           ...this.pointLayer.props.data.attributes,
-          getColor: { value: this.originalColors, size: 4 },
+          getFillColor: { value: this.originalColors, size: 4 },
         },
       },
       transitions: {
-        getColor: {
+        getFillColor: {
           duration: 1500,
           easing: d3.easeCubicInOut,
         },
