@@ -357,6 +357,13 @@ def create_interactive_plot(
     color_cluster_boundaries=True,
     polygon_alpha=0.1,
     cvd_safer=False,
+    point_text_field=None,
+    point_text_min_zoom=10,
+    point_text_size=12,
+    point_text_offset=[0, 10],
+    point_text_color=None,
+    point_text_outline_width=2,
+    point_text_outline_color=[255, 255, 255, 200],
     jupyterhub_api_token=None,
     enable_table_of_contents=False,
     **render_html_kwds,
@@ -462,6 +469,27 @@ def create_interactive_plot(
     cvd_safer: bool (optional, default=False)
         Whether to use a colour palette that is safer for colour vision deficiency (CVD).
         This will override any provided cmap and use a CVD safer palette instead.
+
+    point_text_field: str or None (optional, default=None)
+        The field in the point_dataframe to use for point text labels. If None, no point text labels will be added.
+
+    point_text_min_zoom: int (optional, default=10)
+        The minimum zoom level at which point text labels will be displayed.
+
+    point_text_size: int (optional, default=12)
+        The size of point text labels.
+
+    point_text_offset: list of int (optional, default=[0, 10])
+        The offset of point text labels from their corresponding point.
+
+    point_text_color: str or None (optional, default=None)
+        The color of point text labels. If None, the color will be determined by the darkmode.
+
+    point_text_outline_width: int (optional, default=2)
+        The width of the outline for point text labels.
+
+    point_text_outline_color: list of int (optional, default=[255, 255, 255, 200])
+        The color of the outline for point text labels.
 
     jupyterhub_api_token: str or None (optional, default=None)
         The JupyterHub API token to use when rendering the plot inline in a notebook via jupyterhub.
@@ -688,6 +716,13 @@ def create_interactive_plot(
         label_layers=label_layers,
         cluster_colormap=color_map | {noise_label:noise_color},
         enable_table_of_contents=enable_table_of_contents,
+        point_text_field=point_text_field,
+        point_text_min_zoom=point_text_min_zoom,
+        point_text_size=point_text_size,
+        point_text_offset=point_text_offset,
+        point_text_color=point_text_color,
+        point_text_outline_width=point_text_outline_width,
+        point_text_outline_color=point_text_outline_color,
         **render_html_kwds,
     )
 

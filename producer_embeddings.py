@@ -76,6 +76,14 @@ def main():
         on_click="window.open(hoverData.bsky_url[index], '_blank')",
         enable_search=True,
         search_field="description",
+        background_color="#000000",
+        # Add point text labels that show handles when zoomed in
+        point_text_field="handle",      # Use handle as the text label
+        point_text_min_zoom=8,          # Show labels when zoom level is 8 or higher
+        point_text_size=12,             # 12px font size
+        point_text_offset=[0, 14],      # Position labels 14px above the points
+        point_text_outline_width=2,     # Add a 2px outline for better readability
+        point_text_outline_color=[255, 255, 255, 200],  # White outline with 80% opacity
         # offline_mode=True
     )
 
