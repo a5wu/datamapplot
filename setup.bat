@@ -1,0 +1,13 @@
+@echo off
+echo Setting up environment...
+uv venv --python=3.10
+echo Activating environment...
+call .venv\Scripts\activate
+echo Installing dependencies...
+uv pip install -e . umap-learn torch --force-reinstall
+echo Running producer_embeddings.py...
+python producer_embeddings.py
+echo Run:
+echo .venv\Scripts\activate
+echo python producer_embeddings.py
+echo Setup complete!

@@ -3,6 +3,13 @@
 # subprocess.run(["uv", "pip", "install", "dask[dataframe]<2025.0.1", "numpy", "datamapplot", "umap-learn", "torch", "pandas", "ipykernel"])
 # uv pip install dask[dataframe]<2025.0.1 umap-learn torch pandas numpy ipykernel
 
+import sys
+import importlib
+if 'datamapplot' in sys.modules:
+    importlib.reload(sys.modules['datamapplot'])
+    if 'datamapplot.interactive_rendering' in sys.modules:
+        importlib.reload(sys.modules['datamapplot.interactive_rendering'])
+
 import numpy as np
 import datamapplot
 import matplotlib.pyplot as plt
