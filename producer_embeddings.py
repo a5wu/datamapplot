@@ -69,15 +69,12 @@ plot = datamapplot.create_interactive_plot(
     enable_search=True,
     search_field="description",
     background_color="#000000",
-    # Add point text labels that show handles when zoomed in
-    # point_text_field="handle",      # Use handle as the text label
-    # point_text_min_zoom=8,          # Show labels when zoom level is 8 or higher
-    # point_text_size=12,             # 12px font size
-    # point_text_offset=[0, 14],      # Position labels 14px above the points
-    # point_text_outline_width=2,     # Add a 2px outline for better readability
-    # point_text_outline_color=[255, 255, 255, 200],  # White outline with 80% opacity
-    # font_family="Arial, sans-serif", # Use a system font that's definitely available
-    # offline_mode=True
+    point_text_field="handle",            # Display handles as text labels
+    point_text_min_zoom=10,                # Lower zoom threshold for earlier visibility
+    point_text_size=14,                   # Larger text size
+    point_text_offset=[0, 20],            # Position farther above points
+    point_text_outline_width=3,           # Thicker outline
+    point_text_outline_color=[0, 0, 0, 255]  # Black outline for better contrast
 )
 
 # Print some basic statistics about the embeddings

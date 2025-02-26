@@ -957,6 +957,15 @@ def render_html(
     extra_point_data=None,
     enable_search=False,
     search_field="hover_text",
+    point_text_field=None,
+    point_text_min_zoom=8,
+    point_text_size=12,
+    point_text_offset=[0, 14],
+    point_text_outline_width=2,
+    point_text_outline_color=[255, 255, 255, 200],
+    point_text_font_family=None,
+    point_text_font_weight=None,
+    point_text_template=None,
     histogram_data=None,
     histogram_n_bins=20,
     histogram_group_datetime_by=None,
@@ -1168,6 +1177,33 @@ def render_html(
         If ``enable_search`` is ``True`` and ``extra_point_data`` is not ``None``, then search
         this column of the ``extra_point_data`` dataframe, or use hover_text if set to
         ``"hover_text"``.
+
+    point_text_field: str or None (optional, default=None)
+        The column name from ``point_dataframe`` to use for point text. If None, point text will not be enabled.
+
+    point_text_min_zoom: float (optional, default=8)
+        The minimum zoom level at which point text will be displayed.
+
+    point_text_size: float (optional, default=12)
+        The font size to use for point text.
+
+    point_text_offset: list of float (optional, default=[0, 14])
+        The x and y offset in pixels from the point to position the point text.
+
+    point_text_outline_width: float (optional, default=2)
+        The size of the outline around point text.
+
+    point_text_outline_color: list of float (optional, default=[255, 255, 255, 200])
+        The color of the outline around point text.
+
+    point_text_font_family: str or None (optional, default=None)
+        The font family to use for point text. If None, the default font family will be used.
+
+    point_text_font_weight: str or None (optional, default=None)
+        The font weight to use for point text. If None, the default font weight will be used.
+
+    point_text_template: str or None (optional, default=None)
+        An HTML template to use for point text. If None, the default template will be used.
 
     histogram_data: list, pandas.Series, or None (optional, default=None)
         The data used to generate a histogram. The histogram data can be passed as a list or
@@ -1792,6 +1828,14 @@ def render_html(
         custom_js=custom_js,
         offline_mode=offline_mode,
         offline_mode_data=offline_mode_data,
+        point_text_field=point_text_field,
+        point_text_min_zoom=point_text_min_zoom,
+        point_text_size=point_text_size,
+        point_text_offset=point_text_offset,
+        point_text_outline_width=point_text_outline_width,
+        point_text_outline_color=point_text_outline_color,
+        point_text_font_family=point_text_font_family,
+        point_text_font_weight=point_text_font_weight,
         **dependencies_ctx,
     )
     return html_str

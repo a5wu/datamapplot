@@ -1,5 +1,4 @@
-
-LAYER_ORDER = ['imageLayer', 'dataPointLayer', 'boundaryLayer', 'LabelLayer'];
+LAYER_ORDER = ['imageLayer', 'dataPointLayer', 'pointTextLayer', 'boundaryLayer', 'LabelLayer'];
 
 function getLayerIndex(object) {
   return LAYER_ORDER.indexOf(object.id);
@@ -269,6 +268,146 @@ class DataMap {
     this.layers.push(this.boundaryLayer);
     this.layers.sort((a, b) => getLayerIndex(a) - getLayerIndex(b));
     this.deckgl.setProps({ layers: [...this.layers] });
+  }
+
+  addPointText(textField, {
+    pointTextMinZoom = 8,
+    pointTextSize = 12,
+    pointTextOffset = [0, 14],
+    pointTextOutlineWidth = 2, 
+    pointTextOutlineColor = [255, 255, 255, 200],
+    fontFamily = this.fontFamily,
+    fontWeight = 600,
+  }) {
+    if (!this.metaData || !this.metaData[textField]) {
+      console.warn(`Field "${textField}" not found in metadata. Point text layer will not be created.`);
+      return;
+    }
+
+    // Wait for font to load
+    waitForFont(fontFamily);
+
+    // Create a text layer that displays point data when zoomed in
+    this.pointTextLayer = new deck.TextLayer({
+      id: 'pointTextLayer',
+      data: Array.from({length: this.pointLayer.props.data.length}, (_, i) => ({index: i})),
+      pickable: false,
+      getPosition: d => {
+        const idx = d.index * 2;
+        return [
+          this.pointLayer.props.data.attributes.getPosition.value[idx],
+          this.pointLayer.props.data.attributes.getPosition.value[idx + 1]
+        ];
+      },
+      getText: d => this.metaData[textField][d.index],
+      getColor: [255, 255, 255],  // Default color, will be customizable in future
+      getSize: pointTextSize,
+      sizeScale: 1,
+      getPixelOffset: pointTextOffset,
+      outlineWidth: pointTextOutlineWidth,
+      outlineColor: pointTextOutlineColor,
+      background: false,
+      fontFamily: fontFamily,
+      fontWeight: fontWeight,
+      characterSet: "auto",
+      fontSettings: {
+        sdf: true,
+        fontSize: 64,
+        buffer: 6
+      },
+      visible: false,  // Start hidden until zoom threshold is reached
+    });
+    
+    this.layers.push(this.pointTextLayer);
+    this.layers.sort((a, b) => getLayerIndex(a) - getLayerIndex(b));
+    this.deckgl.setProps({ layers: [...this.layers] });
+    
+    // Save the minimum zoom level
+    this.pointTextMinZoom = pointTextMinZoom;
+    
+    // Add a view state change handler if not already present
+    if (!this._hasViewStateChangeHandler) {
+      this.deckgl.setProps({
+        onViewStateChange: ({viewState, oldViewState}) => {
+          // Check if we need to show/hide the point text layer based on zoom level
+          if (this.pointTextLayer) {
+            const visible = viewState.zoom >= this.pointTextMinZoom;
+            
+            if (visible !== this.pointTextLayer.props.visible) {
+              console.log(`Setting point text layer visibility to ${visible} at zoom level ${viewState.zoom}`);
+              
+              const updatedLayer = this.pointTextLayer.clone({
+                visible: visible
+              });
+              
+              // Update layers array
+              const idx = this.layers.indexOf(this.pointTextLayer);
+              this.layers = [...this.layers.slice(0, idx), updatedLayer, ...this.layers.slice(idx + 1)];
+              this.deckgl.setProps({ layers: this.layers });
+              this.pointTextLayer = updatedLayer;
+            }
+          }
+        }
+      });
+      this._hasViewStateChangeHandler = true;
+    }
+  }
+
+  // Helper method to filter points that are in the current viewport
+  filterPointsInViewport(viewState) {
+    if (!this.pointLayer || !this.pointLayer.props.data.attributes) {
+      return [];
+    }
+    
+    // Create a viewport from the current view state
+    const viewport = new deck.WebMercatorViewport({
+      width: this.container.clientWidth,
+      height: this.container.clientHeight,
+      longitude: viewState.longitude,
+      latitude: viewState.latitude,
+      zoom: viewState.zoom,
+      pitch: viewState.pitch || 0,
+      bearing: viewState.bearing || 0
+    });
+    
+    // Get position attributes from the point layer
+    const positionArray = this.pointLayer.props.data.attributes.getPosition.value;
+    const numPoints = positionArray.length / 2;
+    
+    // Maximum number of labels to show to maintain performance
+    const maxLabels = 1000;
+    
+    // Points inside the viewport
+    const visiblePoints = [];
+    
+    // First pass: find all visible points
+    for (let i = 0; i < numPoints; i++) {
+      const x = positionArray[i * 2];
+      const y = positionArray[i * 2 + 1];
+      
+      // Check if the point is in the viewport
+      const pixelCoords = viewport.project([x, y]);
+      if (pixelCoords[0] >= 0 && pixelCoords[0] <= viewport.width &&
+          pixelCoords[1] >= 0 && pixelCoords[1] <= viewport.height) {
+        visiblePoints.push({
+          index: i,
+          screenX: pixelCoords[0],
+          screenY: pixelCoords[1]
+        });
+      }
+    }
+    
+    // If we have too many points, sample them based on screen distance
+    if (visiblePoints.length > maxLabels) {
+      // Sort by some property for deterministic sampling (could use importance in the future)
+      visiblePoints.sort((a, b) => a.index - b.index);
+      
+      // Simple sampling - take every nth point
+      const n = Math.ceil(visiblePoints.length / maxLabels);
+      return visiblePoints.filter((_, idx) => idx % n === 0);
+    }
+    
+    return visiblePoints;
   }
 
   addMetaData(metaData, {

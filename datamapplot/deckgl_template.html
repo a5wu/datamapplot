@@ -694,6 +694,20 @@
           /* Search */
           searchItem.addEventListener("input", debounce(event => datamap.searchText(event.target.value)));
           {% endif -%}
+          
+          {% if point_text_field %}
+          /* Point Text Layer */
+          datamap.addPointText("{{ point_text_field }}", {
+            pointTextMinZoom: {{ point_text_min_zoom }},
+            pointTextSize: {{ point_text_size }},
+            pointTextOffset: {{ point_text_offset }},
+            pointTextOutlineWidth: {{ point_text_outline_width }},
+            pointTextOutlineColor: {{ point_text_outline_color }},
+            fontFamily: "{{ point_text_font_family or font_family }}",
+            fontWeight: {{ point_text_font_weight or font_weight }}
+          });
+          {% endif -%}
+          
           updateProgressBar('meta-data-progress', 100);
           checkAllDataLoaded();
         }
