@@ -1,0 +1,1 @@
+[ ] Fix the search for zoom / images
