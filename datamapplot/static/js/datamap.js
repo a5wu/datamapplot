@@ -1,4 +1,4 @@
-LAYER_ORDER = ['imageLayer', 'dataPointLayer', 'pointTextLayer', 'boundaryLayer', 'LabelLayer'];
+LAYER_ORDER = ['imageLayer', 'dataPointLayer', 'pointImageLayer', 'pointTextLayer', 'boundaryLayer', 'LabelLayer'];
 
 function getLayerIndex(object) {
   return LAYER_ORDER.indexOf(object.id);
@@ -329,27 +329,145 @@ class DataMap {
     if (!this._hasViewStateChangeHandler) {
       this.deckgl.setProps({
         onViewStateChange: ({viewState, oldViewState}) => {
-          // Check if we need to show/hide the point text layer based on zoom level
-          if (this.pointTextLayer) {
-            const visible = viewState.zoom >= this.pointTextMinZoom;
-            
-            if (visible !== this.pointTextLayer.props.visible) {
-              console.log(`Setting point text layer visibility to ${visible} at zoom level ${viewState.zoom}`);
-              
-              const updatedLayer = this.pointTextLayer.clone({
-                visible: visible
-              });
-              
-              // Update layers array
-              const idx = this.layers.indexOf(this.pointTextLayer);
-              this.layers = [...this.layers.slice(0, idx), updatedLayer, ...this.layers.slice(idx + 1)];
-              this.deckgl.setProps({ layers: this.layers });
-              this.pointTextLayer = updatedLayer;
-            }
-          }
+          // Use the shared handler method
+          this._handleLayerVisibilityOnZoom(viewState);
         }
       });
       this._hasViewStateChangeHandler = true;
+    }
+  }
+
+  // New method for displaying images instead of dots when zoomed in
+  addPointImages({
+    pointImageMinZoom = 8,
+    pointImageUrl = 'https://cdn.bsky.app/img/avatar/plain/did:plc:7l75ck5g4b5k6gxqaq5rejit/bafkreia2gyds76c6uk5szzdxvsfcvnm4nh5nvudchuu3tqc6nlkwetcjai@jpeg',
+  }) {
+    if (!this.pointLayer) {
+      console.warn("Point layer not initialized. Image layer will not be created.");
+      return;
+    }
+
+    // Get the exact properties from the point layer
+    const pointProps = this.pointLayer.props;
+    
+    // Create an icon layer for images that exactly matches the point layer properties
+    this.pointImageLayer = new deck.IconLayer({
+      id: 'pointImageLayer',
+      data: Array.from({length: pointProps.data.length}, (_, i) => ({index: i})),
+      pickable: true,
+      // Use the same position accessor as the point layer
+      getPosition: d => {
+        const idx = d.index * 2;
+        return [
+          pointProps.data.attributes.getPosition.value[idx],
+          pointProps.data.attributes.getPosition.value[idx + 1]
+        ];
+      },
+      // Icon settings for circular images
+      getIcon: d => ({
+        url: pointImageUrl,
+        width: 128,
+        height: 128,
+        mask: false
+      }),
+      // Size settings that directly match the point layer
+      // Since IconLayer size is diameter and ScatterplotLayer uses radius,
+      // we multiply by 2 to match exactly
+      getSize: pointProps.getRadius === undefined ? 2 : 
+               (typeof pointProps.getRadius === 'function' ? 
+                 d => pointProps.getRadius(d) * 2 : 
+                 pointProps.getRadius * 2),
+      sizeUnits: pointProps.radiusUnits === 'common' ? 'common' : 'pixels',
+      sizeScale: pointProps.radiusScale || 1,
+      sizeMinPixels: (pointProps.radiusMinPixels || 1) * 2,
+      sizeMaxPixels: (pointProps.radiusMaxPixels || 100) * 2,
+      // Other properties
+      getColor: [255, 255, 255],
+      visible: false, // Start hidden until zoomed in
+      loadOptions: {
+        image: {
+          crossOrigin: 'anonymous'
+        }
+      },
+      updateTriggers: {
+        getSize: pointProps.updateTriggers?.getRadius || 0
+      }
+    });
+    
+    this.layers.push(this.pointImageLayer);
+    this.layers.sort((a, b) => getLayerIndex(a) - getLayerIndex(b));
+    this.deckgl.setProps({ layers: [...this.layers] });
+    
+    // Save the minimum zoom level
+    this.pointImageMinZoom = pointImageMinZoom;
+    
+    // Add or modify view state change handler
+    if (!this._hasViewStateChangeHandler) {
+      this.deckgl.setProps({
+        onViewStateChange: ({viewState, oldViewState}) => {
+          this._handleLayerVisibilityOnZoom(viewState);
+        }
+      });
+      this._hasViewStateChangeHandler = true;
+    } else {
+      // If handler already exists, still need to update for new layer type
+      this.deckgl.setProps({
+        onViewStateChange: ({viewState, oldViewState}) => {
+          this._handleLayerVisibilityOnZoom(viewState);
+        }
+      });
+    }
+  }
+
+  // Helper method to handle layer visibility changes based on zoom
+  _handleLayerVisibilityOnZoom(viewState) {
+    // Handle image layer visibility
+    if (this.pointImageLayer) {
+      const imageVisible = viewState.zoom >= this.pointImageMinZoom;
+      
+      if (imageVisible !== this.pointImageLayer.props.visible) {
+        // Keep size scale consistent with original point scale
+        // No need to adjust scale based on zoom - deck.gl already handles that
+        
+        // Update image layer
+        const updatedImageLayer = this.pointImageLayer.clone({
+          visible: imageVisible
+        });
+        
+        // Update layers array
+        const idx = this.layers.indexOf(this.pointImageLayer);
+        this.layers = [...this.layers.slice(0, idx), updatedImageLayer, ...this.layers.slice(idx + 1)];
+        this.pointImageLayer = updatedImageLayer;
+        
+        // Toggle point layer visibility to be opposite of images
+        if (this.pointLayer) {
+          const updatedPointLayer = this.pointLayer.clone({
+            visible: !imageVisible
+          });
+          const pointIdx = this.layers.indexOf(this.pointLayer);
+          this.layers = [...this.layers.slice(0, pointIdx), updatedPointLayer, ...this.layers.slice(pointIdx + 1)];
+          this.pointLayer = updatedPointLayer;
+        }
+        
+        this.deckgl.setProps({ layers: this.layers });
+      }
+    }
+    
+    // Handle text layer visibility (existing functionality)
+    if (this.pointTextLayer) {
+      const textVisible = viewState.zoom >= this.pointTextMinZoom;
+      
+      if (textVisible !== this.pointTextLayer.props.visible) {
+        const updatedLayer = this.pointTextLayer.clone({
+          visible: textVisible
+        });
+        
+        // Update layers array
+        const idx = this.layers.indexOf(this.pointTextLayer);
+        this.layers = [...this.layers.slice(0, idx), updatedLayer, ...this.layers.slice(idx + 1)];
+        this.deckgl.setProps({ layers: this.layers });
+        this.pointTextLayer = updatedLayer;
+      }
     }
   }
 

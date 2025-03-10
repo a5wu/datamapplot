@@ -708,6 +708,18 @@
           });
           {% endif -%}
           
+          {% if enable_point_images %}
+          /* Point Image Layer */
+          datamap.addPointImages({
+            pointImageMinZoom: {{ point_image_min_zoom }},
+            pointImageSize: {{ point_image_size }},
+            pointImageSizeUnits: "{{ point_image_size_units or 'pixels' }}",
+            pointImageSizeScale: {{ point_image_size_scale or 1.0 }},
+            pointImageUrl: "{{ point_image_url or 'https://i.imgur.com/SmYfo2m.jpeg' }}",
+            pointImageBorderColor: {{ point_image_border_color or [255, 255, 255, 200] }}
+          });
+          {% endif -%}
+          
           updateProgressBar('meta-data-progress', 100);
           checkAllDataLoaded();
         }

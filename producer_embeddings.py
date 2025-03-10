@@ -69,12 +69,17 @@ plot = datamapplot.create_interactive_plot(
     enable_search=True,
     search_field="description",
     background_color="#000000",
-    point_text_field="handle",            # Display handles as text labels
-    point_text_min_zoom=10,                # Lower zoom threshold for earlier visibility
-    point_text_size=14,                   # Larger text size
-    point_text_offset=[0, 20],            # Position farther above points
-    point_text_outline_width=3,           # Thicker outline
-    point_text_outline_color=[0, 0, 0, 255]  # Black outline for better contrast
+    point_radius_min_pixels=3,                  # Larger minimum dot size
+    point_radius_max_pixels=48,                 # Larger maximum dot size
+    point_text_field="handle",                  # Display handles as text labels
+    point_text_min_zoom=11,                     # Lower zoom threshold for earlier visibility
+    point_text_size=14,                         # Larger text size
+    point_text_offset=[0, 20],                  # Position farther above points
+    point_text_outline_width=3,                 # Thicker outline
+    point_text_outline_color=[0, 0, 0, 255],    # Black outline for better contrast
+    enable_point_images=True,                   # Enable point images
+    point_image_min_zoom=11,                     # Show images at zoom level 8
+    point_image_url="https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Circle-icons-computer.svg/200px-Circle-icons-computer.svg.png"
 )
 
 # Print some basic statistics about the embeddings

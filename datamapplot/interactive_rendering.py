@@ -966,6 +966,13 @@ def render_html(
     point_text_font_family=None,
     point_text_font_weight=None,
     point_text_template=None,
+    enable_point_images=False,
+    point_image_min_zoom=8,
+    point_image_size=24,
+    point_image_size_units='pixels',
+    point_image_size_scale=1.0,
+    point_image_url=None,
+    point_image_border_color=[255, 255, 255, 200],
     histogram_data=None,
     histogram_n_bins=20,
     histogram_group_datetime_by=None,
@@ -1204,6 +1211,27 @@ def render_html(
 
     point_text_template: str or None (optional, default=None)
         An HTML template to use for point text. If None, the default template will be used.
+
+    enable_point_images: bool (optional, default=False)
+        Whether to enable point images.
+
+    point_image_min_zoom: float (optional, default=8)
+        The minimum zoom level at which point images will be displayed.
+
+    point_image_size: float (optional, default=24)
+        The size of point images.
+
+    point_image_size_units: str (optional, default='pixels')
+        The units for point image size.
+
+    point_image_size_scale: float (optional, default=1.0)
+        The scale for point image size.
+
+    point_image_url: str or None (optional, default=None)
+        The URL to the point image.
+
+    point_image_border_color: list of float (optional, default=[255, 255, 255, 200])
+        The color of the outline around point images.
 
     histogram_data: list, pandas.Series, or None (optional, default=None)
         The data used to generate a histogram. The histogram data can be passed as a list or
@@ -1836,6 +1864,14 @@ def render_html(
         point_text_outline_color=point_text_outline_color,
         point_text_font_family=point_text_font_family,
         point_text_font_weight=point_text_font_weight,
+        point_text_template=point_text_template,
+        enable_point_images=enable_point_images,
+        point_image_min_zoom=point_image_min_zoom,
+        point_image_size=point_image_size,
+        point_image_size_units=point_image_size_units,
+        point_image_size_scale=point_image_size_scale,
+        point_image_url=point_image_url,
+        point_image_border_color=point_image_border_color,
         **dependencies_ctx,
     )
     return html_str
