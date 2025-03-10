@@ -353,63 +353,6 @@ class DataMap {
     }
   }
 
-  // Helper method to filter points that are in the current viewport
-  filterPointsInViewport(viewState) {
-    if (!this.pointLayer || !this.pointLayer.props.data.attributes) {
-      return [];
-    }
-    
-    // Create a viewport from the current view state
-    const viewport = new deck.WebMercatorViewport({
-      width: this.container.clientWidth,
-      height: this.container.clientHeight,
-      longitude: viewState.longitude,
-      latitude: viewState.latitude,
-      zoom: viewState.zoom,
-      pitch: viewState.pitch || 0,
-      bearing: viewState.bearing || 0
-    });
-    
-    // Get position attributes from the point layer
-    const positionArray = this.pointLayer.props.data.attributes.getPosition.value;
-    const numPoints = positionArray.length / 2;
-    
-    // Maximum number of labels to show to maintain performance
-    const maxLabels = 1000;
-    
-    // Points inside the viewport
-    const visiblePoints = [];
-    
-    // First pass: find all visible points
-    for (let i = 0; i < numPoints; i++) {
-      const x = positionArray[i * 2];
-      const y = positionArray[i * 2 + 1];
-      
-      // Check if the point is in the viewport
-      const pixelCoords = viewport.project([x, y]);
-      if (pixelCoords[0] >= 0 && pixelCoords[0] <= viewport.width &&
-          pixelCoords[1] >= 0 && pixelCoords[1] <= viewport.height) {
-        visiblePoints.push({
-          index: i,
-          screenX: pixelCoords[0],
-          screenY: pixelCoords[1]
-        });
-      }
-    }
-    
-    // If we have too many points, sample them based on screen distance
-    if (visiblePoints.length > maxLabels) {
-      // Sort by some property for deterministic sampling (could use importance in the future)
-      visiblePoints.sort((a, b) => a.index - b.index);
-      
-      // Simple sampling - take every nth point
-      const n = Math.ceil(visiblePoints.length / maxLabels);
-      return visiblePoints.filter((_, idx) => idx % n === 0);
-    }
-    
-    return visiblePoints;
-  }
-
   addMetaData(metaData, {
     tooltipFunction = ({index}) => this.metaData.hover_text[index],
     onClickFunction = null,
