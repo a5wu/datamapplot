@@ -79,7 +79,8 @@ plot = datamapplot.create_interactive_plot(
     point_text_outline_color=[0, 0, 0, 255],    # Black outline for better contrast
     enable_point_images=True,                   # Enable point images
     point_image_min_zoom=10,                     # Show images at zoom level 8
-    point_image_url="https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Circle-icons-computer.svg/200px-Circle-icons-computer.svg.png"
+    # point_image_url="https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Circle-icons-computer.svg/200px-Circle-icons-computer.svg.png"
+    point_image_url="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/ItsukushimaTorii7379.jpg/330px-ItsukushimaTorii7379.jpg"
 )
 
 # Print some basic statistics about the embeddings

@@ -1,5 +1,65 @@
 LAYER_ORDER = ['imageLayer', 'dataPointLayer', 'pointImageLayer', 'pointTextLayer', 'boundaryLayer', 'LabelLayer'];
 
+// Create a circular version of an image URL
+function createCircularImage(imageUrl) {
+  // Create an offscreen canvas
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  
+  // Set dimensions
+  const size = 128;
+  canvas.width = size;
+  canvas.height = size;
+  
+  // Create a new image
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  
+  // Return a promise that resolves to the data URL
+  return new Promise((resolve, reject) => {
+    img.onload = () => {
+      // Clear the canvas
+      ctx.clearRect(0, 0, size, size);
+      
+      // Create circular clipping path
+      ctx.beginPath();
+      ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2, true);
+      ctx.closePath();
+      ctx.clip();
+      
+      // Draw the image
+      ctx.drawImage(img, 0, 0, size, size);
+      
+      // Border (optional)
+      ctx.beginPath();
+      ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2, true);
+      ctx.closePath();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'white';
+      ctx.stroke();
+      
+      // Convert to data URL
+      resolve(canvas.toDataURL('image/png'));
+    };
+    
+    img.onerror = () => {
+      console.warn(`Failed to load image from ${imageUrl}`);
+      // Return a simple colored circle as fallback
+      ctx.beginPath();
+      ctx.arc(size/2, size/2, size/2, 0, Math.PI * 2, true);
+      ctx.closePath();
+      ctx.fillStyle = '#4285F4';
+      ctx.fill();
+      ctx.lineWidth = 3;
+      ctx.strokeStyle = 'white';
+      ctx.stroke();
+      resolve(canvas.toDataURL('image/png'));
+    };
+    
+    img.src = imageUrl;
+  });
+}
+
 function getLayerIndex(object) {
   return LAYER_ORDER.indexOf(object.id);
 }
@@ -350,53 +410,51 @@ class DataMap {
     // Get the exact properties from the point layer
     const pointProps = this.pointLayer.props;
     
-    // Create an icon layer for images that exactly matches the point layer properties
-    this.pointImageLayer = new deck.IconLayer({
-      id: 'pointImageLayer',
-      data: Array.from({length: pointProps.data.length}, (_, i) => ({index: i})),
-      pickable: true,
-      // Use the same position accessor as the point layer
-      getPosition: d => {
-        const idx = d.index * 2;
-        return [
-          pointProps.data.attributes.getPosition.value[idx],
-          pointProps.data.attributes.getPosition.value[idx + 1]
-        ];
-      },
-      // Icon settings for circular images
-      getIcon: d => ({
-        url: pointImageUrl,
-        width: 128,
-        height: 128,
-        mask: false
-      }),
-      // Size settings that directly match the point layer
-      // Since IconLayer size is diameter and ScatterplotLayer uses radius,
-      // we multiply by 2 to match exactly
-      getSize: pointProps.getRadius === undefined ? 2 : 
-               (typeof pointProps.getRadius === 'function' ? 
-                 d => pointProps.getRadius(d) * 2 : 
-                 pointProps.getRadius * 2),
-      sizeUnits: pointProps.radiusUnits === 'common' ? 'common' : 'pixels',
-      sizeScale: pointProps.radiusScale || 1,
-      sizeMinPixels: (pointProps.radiusMinPixels || 1) * 2,
-      sizeMaxPixels: (pointProps.radiusMaxPixels || 100) * 2,
-      // Other properties
-      getColor: [255, 255, 255],
-      visible: false, // Start hidden until zoomed in
-      loadOptions: {
-        image: {
-          crossOrigin: 'anonymous'
+    // First create a circular version of the image
+    createCircularImage(pointImageUrl).then(circularImageUrl => {
+      // Create an icon layer for images that exactly matches the point layer properties
+      this.pointImageLayer = new deck.IconLayer({
+        id: 'pointImageLayer',
+        data: Array.from({length: pointProps.data.length}, (_, i) => ({index: i})),
+        pickable: true,
+        // Use the same position accessor as the point layer
+        getPosition: d => {
+          const idx = d.index * 2;
+          return [
+            pointProps.data.attributes.getPosition.value[idx],
+            pointProps.data.attributes.getPosition.value[idx + 1]
+          ];
+        },
+        // Icon settings for circular images
+        getIcon: d => ({
+          url: circularImageUrl,
+          width: 128,
+          height: 128,
+          mask: false  // No need for masking since we pre-process the image
+        }),
+        // Size settings that directly match the point layer
+        // Since IconLayer size is diameter and ScatterplotLayer uses radius,
+        // we multiply by 2 to match exactly
+        getSize: pointProps.getRadius === undefined ? 2 : 
+                 (typeof pointProps.getRadius === 'function' ? 
+                   d => pointProps.getRadius(d) * 2 : 
+                   pointProps.getRadius * 2),
+        sizeUnits: pointProps.radiusUnits === 'common' ? 'common' : 'pixels',
+        sizeScale: pointProps.radiusScale || 1,
+        sizeMinPixels: (pointProps.radiusMinPixels || 1) * 2,
+        sizeMaxPixels: (pointProps.radiusMaxPixels || 100) * 2,
+        // Other properties
+        getColor: [255, 255, 255],  // Keep standard white
+        visible: false, // Start hidden until zoomed in
+        updateTriggers: {
+          getSize: pointProps.updateTriggers?.getRadius || 0
         }
-      },
-      updateTriggers: {
-        getSize: pointProps.updateTriggers?.getRadius || 0
-      }
+      });
+      
+      this.layers.push(this.pointImageLayer);
+      this.layers.sort((a, b) => getLayerIndex(a) - getLayerIndex(b));
+      this.deckgl.setProps({ layers: [...this.layers] });
     });
-    
-    this.layers.push(this.pointImageLayer);
-    this.layers.sort((a, b) => getLayerIndex(a) - getLayerIndex(b));
-    this.deckgl.setProps({ layers: [...this.layers] });
     
     // Save the minimum zoom level
     this.pointImageMinZoom = pointImageMinZoom;
