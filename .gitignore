@@ -168,3 +168,7 @@ doc/auto_examples
 doc/sg_execution_times.rst
 
 producer_embeddings.html
+
+embeddings/avatar_images/*
+
+*.parquet

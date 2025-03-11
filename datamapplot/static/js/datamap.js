@@ -344,6 +344,9 @@ class DataMap {
       return;
     }
 
+    // Save the text field name for later use in filtering
+    this.pointTextField = textField;
+    
     // Wait for font to load
     waitForFont(fontFamily);
 
@@ -511,22 +514,22 @@ class DataMap {
     }
     
     // Handle text layer visibility (existing functionality)
-    if (this.pointTextLayer) {
+          if (this.pointTextLayer) {
       const textVisible = viewState.zoom >= this.pointTextMinZoom;
-      
+            
       if (textVisible !== this.pointTextLayer.props.visible) {
-        const updatedLayer = this.pointTextLayer.clone({
+              const updatedLayer = this.pointTextLayer.clone({
           visible: textVisible
-        });
-        
-        // Update layers array
-        const idx = this.layers.indexOf(this.pointTextLayer);
-        this.layers = [...this.layers.slice(0, idx), updatedLayer, ...this.layers.slice(idx + 1)];
-        this.deckgl.setProps({ layers: this.layers });
-        this.pointTextLayer = updatedLayer;
-      }
-    }
-  }
+              });
+              
+              // Update layers array
+              const idx = this.layers.indexOf(this.pointTextLayer);
+              this.layers = [...this.layers.slice(0, idx), updatedLayer, ...this.layers.slice(idx + 1)];
+              this.deckgl.setProps({ layers: this.layers });
+              this.pointTextLayer = updatedLayer;
+            }
+          }
+        }
   
   // Method to load images for the current viewport
   _loadImagesForViewport(viewState) {
@@ -545,8 +548,16 @@ class DataMap {
       this.loadedImageIndices = new Set();
     }
     
+    // Filter visible points by selected status if there's a selection active
+    let pointsToConsider = visiblePoints;
+    const selectedIndices = this.dataSelectionManager.getSelectedIndices();
+    if (selectedIndices.size > 0) {
+      // Only load images for selected points that are in the viewport
+      pointsToConsider = visiblePoints.filter(idx => this.selected[idx] > 0);
+    }
+    
     // Find new points that need images
-    const newPointsToLoad = visiblePoints.filter(idx => !this.loadedImageIndices.has(idx));
+    const newPointsToLoad = pointsToConsider.filter(idx => !this.loadedImageIndices.has(idx));
     
     // If there are new points to load, update the image data
     if (newPointsToLoad.length > 0) {
@@ -774,6 +785,7 @@ class DataMap {
 
     const sizeAdjust = 1/(1 + (Math.sqrt(selectedIndices.size) / Math.log2(this.selected.length)));
 
+    // Update regular point layer
     const updatedPointLayer = this.pointLayer.clone({
       data: {
         ...this.pointLayer.props.data,
@@ -791,11 +803,118 @@ class DataMap {
 
     const idx = this.layers.indexOf(this.pointLayer);
     this.layers = [...this.layers.slice(0, idx), updatedPointLayer, ...this.layers.slice(idx + 1)];
+    this.pointLayer = updatedPointLayer;
+
+    // Also update image layer if it exists
+    if (this.pointImageLayer && this.loadedImageIndices && this.loadedImageIndices.size > 0) {
+      // Update image layer data to only show images for selected points
+      if (hasSelectedIndices) {
+        // Apply the selection to our image data
+        const visibleImageIndices = Array.from(this.loadedImageIndices).filter(index => 
+          this.selected[index] > 0  // Only include points that are selected
+        );
+
+        // Get all images that are visible
+        const imageData = visibleImageIndices.map(index => {
+          // Get the image URL for this point
+          let imageUrl = this.pointImageUrl;
+          if (this.pointImageField && this.metaData && this.metaData[this.pointImageField]) {
+            const nodeImage = this.metaData[this.pointImageField][index];
+            if (nodeImage) {
+              imageUrl = nodeImage;
+            }
+          }
+          
+          return {
+            index,
+            imageUrl
+          };
+        });
+        
+        // Update the layer with filtered data
+        const updatedImageLayer = this.pointImageLayer.clone({
+          data: imageData,
+          updateTriggers: {
+            ...this.pointImageLayer.props.updateTriggers,
+            getIcon: (this.pointImageLayer.props.updateTriggers.getIcon || 0) + 1
+          }
+        });
+        
+        // Update layers array
+        const imgIdx = this.layers.indexOf(this.pointImageLayer);
+        this.layers = [...this.layers.slice(0, imgIdx), updatedImageLayer, ...this.layers.slice(imgIdx + 1)];
+        this.pointImageLayer = updatedImageLayer;
+      } else {
+        // If nothing is selected, show all loaded images
+        this._updateImageLayerData();
+      }
+    }
+    
+    // Update text layer if it exists
+    if (this.pointTextLayer && this.metaData) {
+      if (hasSelectedIndices) {
+        // Filter text data to only show labels for selected points
+        const visibleTextIndices = Array.from(selectedIndices);
+        
+        // Create filtered text data
+        const textData = visibleTextIndices.map(index => {
+          const x = this.pointLayer.props.data.attributes.getPosition.value[index * 2];
+          const y = this.pointLayer.props.data.attributes.getPosition.value[index * 2 + 1];
+          
+          return {
+            position: [x, y],
+            text: this.metaData[this.pointTextField][index] || '',
+            index: index
+          };
+        });
+        
+        // Update the layer with filtered data
+        const updatedTextLayer = this.pointTextLayer.clone({
+          data: textData,
+          updateTriggers: {
+            ...this.pointTextLayer.props.updateTriggers,
+            getText: this.updateTriggerCounter
+          }
+        });
+        
+        // Update layers array
+        const textIdx = this.layers.indexOf(this.pointTextLayer);
+        this.layers = [...this.layers.slice(0, textIdx), updatedTextLayer, ...this.layers.slice(textIdx + 1)];
+        this.pointTextLayer = updatedTextLayer;
+      } else {
+        // If nothing is selected, restore all text labels
+        // We need to recreate the full data array
+        const textData = Array.from({length: this.selected.length}, (_, i) => {
+          const x = this.pointLayer.props.data.attributes.getPosition.value[i * 2];
+          const y = this.pointLayer.props.data.attributes.getPosition.value[i * 2 + 1];
+          
+          return {
+            position: [x, y],
+            text: this.metaData[this.pointTextField][i] || '',
+            index: i
+          };
+        });
+        
+        // Update the layer with all data
+        const updatedTextLayer = this.pointTextLayer.clone({
+          data: textData,
+          updateTriggers: {
+            ...this.pointTextLayer.props.updateTriggers,
+            getText: this.updateTriggerCounter
+          }
+        });
+        
+        // Update layers array
+        const textIdx = this.layers.indexOf(this.pointTextLayer);
+        this.layers = [...this.layers.slice(0, textIdx), updatedTextLayer, ...this.layers.slice(textIdx + 1)];
+        this.pointTextLayer = updatedTextLayer;
+      }
+    }
+
     this.deckgl.setProps({
       layers: this.layers
     });
-    this.pointLayer = updatedPointLayer;
-
+    
     // Update histogram, if any
     if (this.histogramItem && itemId !== this.histogramItemId) {
       if (hasSelectedIndices) {
