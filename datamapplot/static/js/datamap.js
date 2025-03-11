@@ -401,60 +401,36 @@ class DataMap {
   addPointImages({
     pointImageMinZoom = 8,
     pointImageUrl = 'https://cdn.bsky.app/img/avatar/plain/did:plc:7l75ck5g4b5k6gxqaq5rejit/bafkreia2gyds76c6uk5szzdxvsfcvnm4nh5nvudchuu3tqc6nlkwetcjai@jpeg',
+    pointImageField = null  // Field in metadata for per-node URLs
   }) {
     if (!this.pointLayer) {
       console.warn("Point layer not initialized. Image layer will not be created.");
       return;
     }
 
+    // Check if the metadata field exists if provided
+    if (pointImageField && (!this.metaData || !this.metaData[pointImageField])) {
+      console.warn(`Field "${pointImageField}" not found in metadata. Using default image.`);
+    }
+
     // Get the exact properties from the point layer
     const pointProps = this.pointLayer.props;
     
-    // First create a circular version of the image
-    createCircularImage(pointImageUrl).then(circularImageUrl => {
-      // Create an icon layer for images that exactly matches the point layer properties
-      this.pointImageLayer = new deck.IconLayer({
-        id: 'pointImageLayer',
-        data: Array.from({length: pointProps.data.length}, (_, i) => ({index: i})),
-        pickable: true,
-        // Use the same position accessor as the point layer
-        getPosition: d => {
-          const idx = d.index * 2;
-          return [
-            pointProps.data.attributes.getPosition.value[idx],
-            pointProps.data.attributes.getPosition.value[idx + 1]
-          ];
-        },
-        // Icon settings for circular images
-        getIcon: d => ({
-          url: circularImageUrl,
-          width: 128,
-          height: 128,
-          mask: false  // No need for masking since we pre-process the image
-        }),
-        // Size settings that directly match the point layer
-        // Since IconLayer size is diameter and ScatterplotLayer uses radius,
-        // we multiply by 2 to match exactly
-        getSize: pointProps.getRadius === undefined ? 2 : 
-                 (typeof pointProps.getRadius === 'function' ? 
-                   d => pointProps.getRadius(d) * 2 : 
-                   pointProps.getRadius * 2),
-        sizeUnits: pointProps.radiusUnits === 'common' ? 'common' : 'pixels',
-        sizeScale: pointProps.radiusScale || 1,
-        sizeMinPixels: (pointProps.radiusMinPixels || 1) * 2,
-        sizeMaxPixels: (pointProps.radiusMaxPixels || 100) * 2,
-        // Other properties
-        getColor: [255, 255, 255],  // Keep standard white
-        visible: false, // Start hidden until zoomed in
-        updateTriggers: {
-          getSize: pointProps.updateTriggers?.getRadius || 0
-        }
-      });
-      
-      this.layers.push(this.pointImageLayer);
-      this.layers.sort((a, b) => getLayerIndex(a) - getLayerIndex(b));
-      this.deckgl.setProps({ layers: [...this.layers] });
-    });
+    // Create placeholder for image layer - we'll create it when needed
+    this.pointImageLayer = null;
+    
+    // Image loading state tracking
+    this.imagesLoaded = false;
+    this.pointImageUrl = pointImageUrl;
+    this.pointImageField = pointImageField;
+    this.pointImageProps = {
+      pointProps: pointProps,
+      // Store other settings we'll need when creating the layer
+      sizeUnits: pointProps.radiusUnits === 'common' ? 'common' : 'pixels',
+      sizeScale: pointProps.radiusScale || 1,
+      sizeMinPixels: (pointProps.radiusMinPixels || 1) * 2,
+      sizeMaxPixels: (pointProps.radiusMaxPixels || 100) * 2,
+    };
     
     // Save the minimum zoom level
     this.pointImageMinZoom = pointImageMinZoom;
@@ -479,35 +455,58 @@ class DataMap {
 
   // Helper method to handle layer visibility changes based on zoom
   _handleLayerVisibilityOnZoom(viewState) {
-    // Handle image layer visibility
-    if (this.pointImageLayer) {
+    // Handle image layer
+    if (this.pointImageMinZoom !== undefined) {
       const imageVisible = viewState.zoom >= this.pointImageMinZoom;
       
-      if (imageVisible !== this.pointImageLayer.props.visible) {
-        // Keep size scale consistent with original point scale
-        // No need to adjust scale based on zoom - deck.gl already handles that
+      // If we need to show images and haven't created the layer yet
+      if (imageVisible && !this.imagesLoaded) {
+        // First initialization of image layer - create empty layer
+        this._createImageLayer();
+        this.imagesLoaded = true;
         
-        // Update image layer
-        const updatedImageLayer = this.pointImageLayer.clone({
-          visible: imageVisible
-        });
-        
-        // Update layers array
-        const idx = this.layers.indexOf(this.pointImageLayer);
-        this.layers = [...this.layers.slice(0, idx), updatedImageLayer, ...this.layers.slice(idx + 1)];
-        this.pointImageLayer = updatedImageLayer;
-        
-        // Toggle point layer visibility to be opposite of images
-        if (this.pointLayer) {
-          const updatedPointLayer = this.pointLayer.clone({
-            visible: !imageVisible
+        // Load images just for the visible viewport
+        this._loadImagesForViewport(viewState);
+      }
+      
+      // If layer exists and we've already crossed the visibility threshold
+      if (this.pointImageLayer && this.imagesLoaded) {
+        // Update layer visibility if needed
+        if (imageVisible !== this.pointImageLayer.props.visible) {
+          // Update image layer visibility
+          const updatedImageLayer = this.pointImageLayer.clone({
+            visible: imageVisible
           });
-          const pointIdx = this.layers.indexOf(this.pointLayer);
-          this.layers = [...this.layers.slice(0, pointIdx), updatedPointLayer, ...this.layers.slice(pointIdx + 1)];
-          this.pointLayer = updatedPointLayer;
+          
+          // Update layers array
+          const idx = this.layers.indexOf(this.pointImageLayer);
+          this.layers = [...this.layers.slice(0, idx), updatedImageLayer, ...this.layers.slice(idx + 1)];
+          this.pointImageLayer = updatedImageLayer;
+          
+          // Toggle point layer visibility to be opposite of images
+          if (this.pointLayer) {
+            const updatedPointLayer = this.pointLayer.clone({
+              visible: !imageVisible
+            });
+            const pointIdx = this.layers.indexOf(this.pointLayer);
+            this.layers = [...this.layers.slice(0, pointIdx), updatedPointLayer, ...this.layers.slice(pointIdx + 1)];
+            this.pointLayer = updatedPointLayer;
+          }
+          
+          this.deckgl.setProps({ layers: this.layers });
         }
         
-        this.deckgl.setProps({ layers: this.layers });
+        // If the viewport has changed significantly and images are visible,
+        // check if we need to load more images for newly visible points
+        if (imageVisible && 
+            (!this.lastViewportCheck || 
+             Math.abs(viewState.longitude - this.lastViewportCheck.longitude) > 0.01 ||
+             Math.abs(viewState.latitude - this.lastViewportCheck.latitude) > 0.01 ||
+             Math.abs(viewState.zoom - this.lastViewportCheck.zoom) > 0.2)) {
+          
+          this._loadImagesForViewport(viewState);
+          this.lastViewportCheck = {...viewState};
+        }
       }
     }
     
@@ -527,6 +526,139 @@ class DataMap {
         this.pointTextLayer = updatedLayer;
       }
     }
+  }
+  
+  // Method to load images for the current viewport
+  _loadImagesForViewport(viewState) {
+    if (!this.pointLayer || !this.pointImageLayer) return;
+    
+    // Get visible points
+    const visiblePoints = getVisiblePointsInViewport(
+      this.pointLayer.props.data,
+      viewState,
+      this.container.clientWidth,
+      this.container.clientHeight
+    );
+    
+    // Keep track of which points have already had images loaded
+    if (!this.loadedImageIndices) {
+      this.loadedImageIndices = new Set();
+    }
+    
+    // Find new points that need images
+    const newPointsToLoad = visiblePoints.filter(idx => !this.loadedImageIndices.has(idx));
+    
+    // If there are new points to load, update the image data
+    if (newPointsToLoad.length > 0) {
+      console.log(`Loading images for ${newPointsToLoad.length} new visible points`);
+      
+      // Mark these indices as loaded
+      newPointsToLoad.forEach(idx => this.loadedImageIndices.add(idx));
+      
+      // Update the image layer with the new visible indices
+      this._updateImageLayerData();
+    }
+  }
+  
+  // Helper to actually create the image layer (initial empty layer)
+  _createImageLayer() {
+    const { pointProps, sizeUnits, sizeScale, sizeMinPixels, sizeMaxPixels } = this.pointImageProps;
+    const pointImageField = this.pointImageField;
+    const defaultImageUrl = this.pointImageUrl;
+    
+    // Initialize empty data structure for image URLs
+    this.pointImages = [];
+    this.loadedImageIndices = new Set();
+    
+    this.pointImageLayer = new deck.IconLayer({
+      id: 'pointImageLayer',
+      data: [], // Start with empty data array
+      pickable: true,
+      // Use the same position accessor as the point layer
+      getPosition: d => {
+        const idx = d.index * 2;
+        return [
+          pointProps.data.attributes.getPosition.value[idx],
+          pointProps.data.attributes.getPosition.value[idx + 1]
+        ];
+      },
+      // Icon settings for circular images
+      getIcon: d => {
+        return {
+          url: d.imageUrl,
+          width: 128,
+          height: 128,
+          mask: false  // Setting mask to false so the image shows properly
+        };
+      },
+      // Size settings
+      getSize: pointProps.getRadius === undefined ? 2 : 
+               (typeof pointProps.getRadius === 'function' ? 
+                 d => pointProps.getRadius(d.index) * 2 : 
+                 pointProps.getRadius * 2),
+      sizeUnits: sizeUnits,
+      sizeScale: sizeScale,
+      sizeMinPixels: sizeMinPixels,
+      sizeMaxPixels: sizeMaxPixels,
+      // Other properties
+      getColor: [255, 255, 255],
+      visible: false, // Start hidden, visibility will be updated in _handleLayerVisibilityOnZoom
+      updateTriggers: {
+        getSize: pointProps.updateTriggers?.getRadius || 0,
+        getIcon: 0 // We'll increment this if the image URLs change
+      },
+      loadOptions: {
+        image: {
+          crossOrigin: 'anonymous'
+        }
+      }
+    });
+    
+    this.layers.push(this.pointImageLayer);
+    this.layers.sort((a, b) => getLayerIndex(a) - getLayerIndex(b));
+    this.deckgl.setProps({ layers: [...this.layers] });
+    
+    console.log("Created initial image layer");
+  }
+  
+  // Method to update image layer data with loaded images
+  _updateImageLayerData() {
+    if (!this.pointImageLayer || !this.loadedImageIndices) return;
+    
+    const pointImageField = this.pointImageField;
+    const defaultImageUrl = this.pointImageUrl;
+    
+    // Build data array for loaded points
+    const imageData = Array.from(this.loadedImageIndices).map(index => {
+      // Get the image URL for this point
+      let imageUrl = defaultImageUrl;
+      if (pointImageField && this.metaData && this.metaData[pointImageField]) {
+        const nodeImage = this.metaData[pointImageField][index];
+        if (nodeImage) {
+          imageUrl = nodeImage;
+        }
+      }
+      
+      return {
+        index,
+        imageUrl
+      };
+    });
+    
+    // Update the layer with new data
+    const updatedImageLayer = this.pointImageLayer.clone({
+      data: imageData,
+      updateTriggers: {
+        ...this.pointImageLayer.props.updateTriggers,
+        getIcon: (this.pointImageLayer.props.updateTriggers.getIcon || 0) + 1
+      }
+    });
+    
+    // Update layers array
+    const idx = this.layers.indexOf(this.pointImageLayer);
+    this.layers = [...this.layers.slice(0, idx), updatedImageLayer, ...this.layers.slice(idx + 1)];
+    this.pointImageLayer = updatedImageLayer;
+    this.deckgl.setProps({ layers: this.layers });
   }
 
   addMetaData(metaData, {
@@ -779,4 +911,47 @@ class DataMap {
     });
     this.pointLayer = updatedPointLayer;
   }
+}
+
+// Add a new method to filter points in viewport (after the class definition)
+function getVisiblePointsInViewport(pointsData, viewState, containerWidth, containerHeight, maxPoints = 1000) {
+  // Create a viewport from the current view state
+  const viewport = new deck.WebMercatorViewport({
+    width: containerWidth,
+    height: containerHeight,
+    longitude: viewState.longitude,
+    latitude: viewState.latitude,
+    zoom: viewState.zoom,
+    pitch: viewState.pitch || 0,
+    bearing: viewState.bearing || 0
+  });
+  
+  // Get position attributes from the point data
+  const positionArray = pointsData.attributes.getPosition.value;
+  const numPoints = positionArray.length / 2;
+  
+  // Points inside the viewport
+  const visiblePoints = [];
+  
+  // Find visible points
+  for (let i = 0; i < numPoints; i++) {
+    const x = positionArray[i * 2];
+    const y = positionArray[i * 2 + 1];
+    
+    // Check if the point is in the viewport
+    const pixelCoords = viewport.project([x, y]);
+    if (pixelCoords[0] >= -50 && pixelCoords[0] <= viewport.width + 50 &&
+        pixelCoords[1] >= -50 && pixelCoords[1] <= viewport.height + 50) {
+      visiblePoints.push(i);
+    }
+  }
+  
+  // If we have too many points, sample them
+  if (visiblePoints.length > maxPoints) {
+    // Simple sampling - take every nth point
+    const n = Math.ceil(visiblePoints.length / maxPoints);
+    return visiblePoints.filter((_, idx) => idx % n === 0);
+  }
+  
+  return visiblePoints;
 }

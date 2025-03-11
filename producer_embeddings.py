@@ -11,6 +11,7 @@ import torch
 import pandas as pd
 import os
 import shutil
+import random
 
 producer_embeddings = torch.load('./embeddings/producer_embeddings.pt', weights_only=False)
 producer_communities = np.load('./embeddings/producer_communities.npy')
@@ -27,6 +28,19 @@ except FileNotFoundError:
 
 producer_df = pd.read_parquet('./embeddings/producer_profiles.parquet')
 producer_df['bsky_url'] = producer_df['did'].apply(lambda x: f"https://bsky.app/profile/{x}")
+
+# Define a list of image URLs to randomly assign
+image_urls = [
+    "https://inkcap.us-east.host.bsky.network/xrpc/com.atproto.sync.getBlob?did=did:plc:7l75ck5g4b5k6gxqaq5rejit&cid=bafkreia2gyds76c6uk5szzdxvsfcvnm4nh5nvudchuu3tqc6nlkwetcjai",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/ItsukushimaTorii7379.jpg/330px-ItsukushimaTorii7379.jpg"
+]
+
+# Make the first image URL rare (only 0.1% of the data)
+rare_image_probability = 0.001  # 0.1%
+producer_df['profile_image_url'] = [
+    image_urls[0] if random.random() < rare_image_probability else image_urls[1] 
+    for _ in range(len(producer_df))
+]
 
 # Convert communities to string type
 producer_communities = producer_communities.astype(str)
@@ -45,42 +59,31 @@ hover_text_template = """
 </div>
 """
 
-# Make sure example_image.jpg exists in the embeddings directory
-# If not, create a simple colored circle as a placeholder
-if not os.path.exists('example_image.jpg'):
-    # Create a simple colored circle as the example image
-    fig, ax = plt.subplots(figsize=(1, 1), dpi=128)
-    circle = plt.Circle((0.5, 0.5), 0.4, color='blue', alpha=0.7)
-    ax.add_patch(circle)
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.axis('off')
-    plt.savefig('example_image.jpg', bbox_inches='tight', pad_inches=0)
-    plt.close(fig)
-
 # Create the plot
 plot = datamapplot.create_interactive_plot(
     embeddings_2d, 
     producer_communities,
     hover_text=producer_df['display_name'].to_list(),
-    extra_point_data=producer_df[['handle','description', 'followers', 'following', 'bsky_url', 'posts']].fillna(''),
+    extra_point_data=producer_df[['handle','description', 'followers', 'following', 'bsky_url', 'posts', 'profile_image_url']].fillna(''),
     hover_text_html_template=hover_text_template,
     on_click="window.open(hoverData.bsky_url[index], '_blank')",
     enable_search=True,
     search_field="description",
     background_color="#000000",
-    point_radius_min_pixels=0.2,                  # Larger minimum dot size
-    point_radius_max_pixels=16,                 # Larger maximum dot size
-    point_text_field="handle",                  # Display handles as text labels
-    point_text_min_zoom=10,                     # Lower zoom threshold for earlier visibility
-    point_text_size=14,                         # Larger text size
-    point_text_offset=[0, 20],                  # Position farther above points
-    point_text_outline_width=3,                 # Thicker outline
-    point_text_outline_color=[0, 0, 0, 255],    # Black outline for better contrast
-    enable_point_images=True,                   # Enable point images
-    point_image_min_zoom=10,                     # Show images at zoom level 8
-    # point_image_url="https://upload.wikimedia.org/wikipedia/commons/thumb/0/02/Circle-icons-computer.svg/200px-Circle-icons-computer.svg.png"
-    point_image_url="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/ItsukushimaTorii7379.jpg/330px-ItsukushimaTorii7379.jpg"
+    point_radius_min_pixels=0.2,                  # Minimum dot size
+    point_radius_max_pixels=16,                   # Maximum dot size
+    point_text_field="handle",                    # Display handles as text labels
+    point_text_min_zoom=10,                       # Lower zoom threshold for text visibility
+    point_text_size=14,                           # Larger text size
+    point_text_offset=[0, 20],                    # Position farther above points
+    point_text_outline_width=3,                   # Thicker outline
+    point_text_outline_color=[0, 0, 0, 255],      # Black outline for better contrast
+    enable_point_images=True,                     # Enable point images
+    point_image_min_zoom=10,                      # Only load and show images at zoom level 10
+    # point_image_url="https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/ItsukushimaTorii7379.jpg/330px-ItsukushimaTorii7379.jpg",
+    # point_image_url="https://inkcap.us-east.host.bsky.network/xrpc/com.atproto.sync.getBlob?did=did:plc:7l75ck5g4b5k6gxqaq5rejit&cid=bafkreia2gyds76c6uk5szzdxvsfcvnm4nh5nvudchuu3tqc6nlkwetcjai",
+    # For per-node images, uncomment and create field with image URLs:
+    point_image_field="profile_image_url",
 )
 
 # Print some basic statistics about the embeddings
