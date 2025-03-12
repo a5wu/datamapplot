@@ -78,11 +78,11 @@ producer_df['profile_image_url'] = [
 # Convert communities to string type
 producer_communities = producer_communities.astype(str)
 
-# follower_counts = producer_df['followers'].fillna(1).to_numpy()
-# min_size = 3  # Minimum marker size
-# max_size = 25  # Maximum marker size
-# log_followers = np.log1p(follower_counts)  # log(1+x) to handle zeros
-# marker_size_array = min_size + (max_size - min_size) * (log_followers - log_followers.min()) / (log_followers.max() - log_followers.min())
+follower_counts = producer_df['followers'].fillna(1).to_numpy()
+min_size = 3  # Minimum marker size
+max_size = 25  # Maximum marker size
+log_followers = np.log1p(follower_counts)  # log(1+x) to handle zeros
+marker_size_array = min_size + (max_size - min_size) * (log_followers - log_followers.min()) / (log_followers.max() - log_followers.min())
 
 # Define hover text template for interactive visualization
 hover_text_template = """
@@ -109,7 +109,7 @@ plot = datamapplot.create_interactive_plot(
     enable_search=True,
     search_field="description",
     background_color="#000000",
-    # marker_size_array=marker_size_array,
+    marker_size_array=marker_size_array,
     point_radius_min_pixels=0.2,                  # Minimum dot size
     point_radius_max_pixels=16,                   # Maximum dot size
     point_text_field="handle",                    # Display handles as text labels

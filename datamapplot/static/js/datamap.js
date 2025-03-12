@@ -490,14 +490,14 @@ class DataMap {
           this.layers = [...this.layers.slice(0, idx), updatedImageLayer, ...this.layers.slice(idx + 1)];
           this.pointImageLayer = updatedImageLayer;
           
-          // Update point layer for border effect - keep visible but adjust size
+          // Update point layer for border effect - keep visible but adjust line width
           if (this.pointLayer) {
             const updatedPointLayer = this.pointLayer.clone({
               visible: true, // Keep visible for border effect
               // Remove the grey border based on user preference
-              lineWidthMinPixels: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMinPixels,
-              lineWidthMaxPixels: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMaxPixels,
-              lineWidthScale: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthScale,
+              lineWidthMinPixels: (imageVisible && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMinPixels,
+              lineWidthMaxPixels: (imageVisible && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMaxPixels,
+              lineWidthScale: (imageVisible && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthScale,
               // Keep other properties unchanged
             });
             const pointIdx = this.layers.indexOf(this.pointLayer);
@@ -523,7 +523,7 @@ class DataMap {
     }
     
     // Handle text layer visibility (existing functionality)
-          if (this.pointTextLayer) {
+        if (this.pointTextLayer) {
       const textVisible = viewState.zoom >= this.pointTextMinZoom;
             
       if (textVisible !== this.pointTextLayer.props.visible) {
@@ -593,6 +593,9 @@ class DataMap {
     // Border sizing - make images slightly smaller than points to create border effect
     const borderSizeFactor = this.pointImageBorderSizeFactor || 0.85; // Use configured factor or default
     
+    // Check if we have variable size points (marker_size_array)
+    const hasVariableSizes = pointProps.data.attributes.getRadius !== undefined;
+    
     this.pointImageLayer = new deck.IconLayer({
       id: 'pointImageLayer',
       data: [], // Start with empty data array
@@ -615,10 +618,17 @@ class DataMap {
         };
       },
       // Size settings - apply border effect by making images slightly smaller
-      getSize: pointProps.getRadius === undefined ? 2 * borderSizeFactor : 
-               (typeof pointProps.getRadius === 'function' ? 
-                 d => pointProps.getRadius(d.index) * 2 * borderSizeFactor : 
-                 pointProps.getRadius * 2 * borderSizeFactor),
+      // Handle both fixed size and dynamic size (marker_size_array) cases
+      getSize: hasVariableSizes ? 
+               (d => {
+                 // Get the radius directly from the point layer's radius array
+                 const radius = pointProps.data.attributes.getRadius.value[d.index];
+                 return radius * 2 * borderSizeFactor;
+               }) : 
+               (pointProps.getRadius === undefined ? 2 * borderSizeFactor : 
+                 (typeof pointProps.getRadius === 'function' ? 
+                   d => pointProps.getRadius(d.index) * 2 * borderSizeFactor : 
+                   pointProps.getRadius * 2 * borderSizeFactor)),
       sizeUnits: sizeUnits,
       sizeScale: sizeScale,
       sizeMinPixels: sizeMinPixels * borderSizeFactor,
@@ -821,16 +831,13 @@ class DataMap {
     this.layers = [...this.layers.slice(0, idx), updatedPointLayer, ...this.layers.slice(idx + 1)];
     this.pointLayer = updatedPointLayer;
 
-    // Also update image layer if it exists
-    if (this.pointImageLayer && this.loadedImageIndices && this.loadedImageIndices.size > 0) {
-      // Update image layer data to only show images for selected points
+    // Update image layer if it exists
+    if (this.pointImageLayer && this.imagesLoaded) {
       if (hasSelectedIndices) {
-        // Apply the selection to our image data
-        const visibleImageIndices = Array.from(this.loadedImageIndices).filter(index => 
-          this.selected[index] > 0  // Only include points that are selected
-        );
-
-        // Get all images that are visible
+        // If selection active, filter image data to only show selected points
+        const visibleImageIndices = Array.from(selectedIndices).filter(index => this.loadedImageIndices.has(index));
+        
+        // Create a filtered data array
         const imageData = visibleImageIndices.map(index => {
           // Get the image URL for this point
           let imageUrl = this.pointImageUrl;
@@ -852,17 +859,17 @@ class DataMap {
           data: imageData,
           updateTriggers: {
             ...this.pointImageLayer.props.updateTriggers,
-            getIcon: (this.pointImageLayer.props.updateTriggers.getIcon || 0) + 1
+            getIcon: this.updateTriggerCounter
           }
         });
         
         // Update layers array
-        const imgIdx = this.layers.indexOf(this.pointImageLayer);
-        this.layers = [...this.layers.slice(0, imgIdx), updatedImageLayer, ...this.layers.slice(imgIdx + 1)];
+        const imageIdx = this.layers.indexOf(this.pointImageLayer);
+        this.layers = [...this.layers.slice(0, imageIdx), updatedImageLayer, ...this.layers.slice(imageIdx + 1)];
         this.pointImageLayer = updatedImageLayer;
       } else {
-        // If nothing is selected, show all loaded images
-        this._updateImageLayerData();
+        // If no selection, restore all image points that were previously loaded
+        this._updateImageLayerData(); // This will recreate the full set of loaded images
       }
     }
     
