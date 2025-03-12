@@ -421,100 +421,150 @@ class DataMap {
     // Get the exact properties from the point layer
     const pointProps = this.pointLayer.props;
     
-    // Create placeholder for image layer - we'll create it when needed
-    this.pointImageLayer = null;
-    
-    // Image loading state tracking
-    this.imagesLoaded = false;
+    // Store important settings we'll need 
+    this.pointImageMinZoom = pointImageMinZoom;
     this.pointImageUrl = pointImageUrl;
     this.pointImageField = pointImageField;
     this.pointImageBorderSizeFactor = pointImageBorderSizeFactor;
     this.pointImageShowOutline = pointImageShowOutline;
-    this.pointImageProps = {
-      pointProps: pointProps,
-      // Store other settings we'll need when creating the layer
+    
+    // Track which images have been loaded
+    this.loadedImageIndices = new Set();
+    
+    // Create an array that mirrors the point data structure to use for the image layer
+    const numPoints = this.pointLayer.props.data.length;
+    const imageLayerData = Array(numPoints).fill(null).map((_, i) => ({
+      index: i,
+      imageUrl: null, // Will be populated when needed
+      isLoaded: false
+    }));
+    
+    // Border sizing - make images slightly smaller than points to create border effect
+    const borderSizeFactor = this.pointImageBorderSizeFactor;
+    
+    // Check if we have variable size points (marker_size_array)
+    const hasVariableSizes = pointProps.data.attributes.getRadius !== undefined;
+    
+    // Create the image layer
+    this.pointImageLayer = new deck.IconLayer({
+      id: 'pointImageLayer',
+      data: imageLayerData,
+      pickable: true,
+      // Use the same position accessor as the point layer
+      getPosition: d => {
+        const idx = d.index * 2;
+        return [
+          pointProps.data.attributes.getPosition.value[idx],
+          pointProps.data.attributes.getPosition.value[idx + 1]
+        ];
+      },
+      // Icon settings for circular images
+      getIcon: d => {
+        // Return a placeholder if the image hasn't been loaded yet
+        if (!d.imageUrl) {
+          return {
+            url: this.pointImageUrl, // Default URL
+            width: 128,
+            height: 128,
+            mask: false
+          };
+        }
+        
+        return {
+          url: d.imageUrl,
+          width: 128,
+          height: 128,
+          mask: false
+        };
+      },
+      // Size settings - apply border effect by making images slightly smaller
+      getSize: hasVariableSizes ? 
+               (d => {
+                 // Get the radius directly from the point layer's radius array
+                 const radius = pointProps.data.attributes.getRadius.value[d.index];
+                 return radius * 2 * borderSizeFactor;
+               }) : 
+               (pointProps.getRadius === undefined ? 2 * borderSizeFactor : 
+                 (typeof pointProps.getRadius === 'function' ? 
+                   d => pointProps.getRadius(d.index) * 2 * borderSizeFactor : 
+                   pointProps.getRadius * 2 * borderSizeFactor)),
       sizeUnits: pointProps.radiusUnits === 'common' ? 'common' : 'pixels',
       sizeScale: pointProps.radiusScale || 1,
-      sizeMinPixels: (pointProps.radiusMinPixels || 1) * 2,
-      sizeMaxPixels: (pointProps.radiusMaxPixels || 100) * 2,
-    };
+      sizeMinPixels: (pointProps.radiusMinPixels || 1) * 2 * borderSizeFactor,
+      sizeMaxPixels: (pointProps.radiusMaxPixels || 100) * 2 * borderSizeFactor,
+      // Other properties
+      getColor: [255, 255, 255],
+      visible: false, // Start hidden, visibility will be updated in _handleLayerVisibilityOnZoom
+      updateTriggers: {
+        getSize: pointProps.updateTriggers?.getRadius || 0,
+        getIcon: 0 
+      },
+      loadOptions: {
+        image: {
+          crossOrigin: 'anonymous'
+        }
+      }
+    });
     
-    // Save the minimum zoom level
-    this.pointImageMinZoom = pointImageMinZoom;
+    this.layers.push(this.pointImageLayer);
+    this.layers.sort((a, b) => getLayerIndex(a) - getLayerIndex(b));
+    this.deckgl.setProps({ layers: [...this.layers] });
     
-    // Add or modify view state change handler
+    // Add a view state change handler if not already present
     if (!this._hasViewStateChangeHandler) {
       this.deckgl.setProps({
         onViewStateChange: ({viewState, oldViewState}) => {
+          // Use the shared handler method
           this._handleLayerVisibilityOnZoom(viewState);
         }
       });
       this._hasViewStateChangeHandler = true;
-    } else {
-      // If handler already exists, still need to update for new layer type
-      this.deckgl.setProps({
-        onViewStateChange: ({viewState, oldViewState}) => {
-          this._handleLayerVisibilityOnZoom(viewState);
-        }
-      });
     }
   }
 
   // Helper method to handle layer visibility changes based on zoom
   _handleLayerVisibilityOnZoom(viewState) {
     // Handle image layer
-    if (this.pointImageMinZoom !== undefined) {
+    if (this.pointImageMinZoom !== undefined && this.pointImageLayer) {
       const imageVisible = viewState.zoom >= this.pointImageMinZoom;
       
-      // If we need to show images and haven't created the layer yet
-      if (imageVisible && !this.imagesLoaded) {
-        // First initialization of image layer - create empty layer
-        this._createImageLayer();
-        this.imagesLoaded = true;
+      // If visibility state changed, update it
+      if (imageVisible !== this.pointImageLayer.props.visible) {
+        // Update image layer visibility
+        const updatedImageLayer = this.pointImageLayer.clone({
+          visible: imageVisible
+        });
         
-        // Load images just for the visible viewport
-        this._loadImagesForViewport(viewState);
-      }
-      
-      // If layer exists and we've already crossed the visibility threshold
-      if (this.pointImageLayer && this.imagesLoaded) {
-        // Update layer visibility if needed
-        if (imageVisible !== this.pointImageLayer.props.visible) {
-          // Update image layer visibility
-          const updatedImageLayer = this.pointImageLayer.clone({
-            visible: imageVisible
+        // Update layers array
+        const idx = this.layers.indexOf(this.pointImageLayer);
+        this.layers = [...this.layers.slice(0, idx), updatedImageLayer, ...this.layers.slice(idx + 1)];
+        this.pointImageLayer = updatedImageLayer;
+        
+        // Update point layer for border effect - keep visible but adjust line width
+        if (this.pointLayer) {
+          const updatedPointLayer = this.pointLayer.clone({
+            visible: true, // Keep visible for border effect
+            // Remove the grey border based on user preference
+            lineWidthMinPixels: (imageVisible && !this.pointImageShowOutline) ? 0 : this.pointLineWidthMinPixels,
+            lineWidthMaxPixels: (imageVisible && !this.pointImageShowOutline) ? 0 : this.pointLineWidthMaxPixels,
+            lineWidthScale: (imageVisible && !this.pointImageShowOutline) ? 0 : this.pointLineWidth,
+            // Keep other properties unchanged
           });
-          
-          // Update layers array
-          const idx = this.layers.indexOf(this.pointImageLayer);
-          this.layers = [...this.layers.slice(0, idx), updatedImageLayer, ...this.layers.slice(idx + 1)];
-          this.pointImageLayer = updatedImageLayer;
-          
-          // Update point layer for border effect - keep visible but adjust line width
-          if (this.pointLayer) {
-            const updatedPointLayer = this.pointLayer.clone({
-              visible: true, // Keep visible for border effect
-              // Remove the grey border based on user preference
-              lineWidthMinPixels: (imageVisible && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMinPixels,
-              lineWidthMaxPixels: (imageVisible && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMaxPixels,
-              lineWidthScale: (imageVisible && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthScale,
-              // Keep other properties unchanged
-            });
-            const pointIdx = this.layers.indexOf(this.pointLayer);
-            this.layers = [...this.layers.slice(0, pointIdx), updatedPointLayer, ...this.layers.slice(pointIdx + 1)];
-            this.pointLayer = updatedPointLayer;
-          }
-          
-          this.deckgl.setProps({ layers: this.layers });
+          const pointIdx = this.layers.indexOf(this.pointLayer);
+          this.layers = [...this.layers.slice(0, pointIdx), updatedPointLayer, ...this.layers.slice(pointIdx + 1)];
+          this.pointLayer = updatedPointLayer;
         }
         
-        // If the viewport has changed significantly and images are visible,
-        // check if we need to load more images for newly visible points
-        if (imageVisible && 
-            (!this.lastViewportCheck || 
-             Math.abs(viewState.longitude - this.lastViewportCheck.longitude) > 0.01 ||
-             Math.abs(viewState.latitude - this.lastViewportCheck.latitude) > 0.01 ||
-             Math.abs(viewState.zoom - this.lastViewportCheck.zoom) > 0.2)) {
+        this.deckgl.setProps({ layers: this.layers });
+      }
+      
+      // If images are visible, load images for visible points
+      if (imageVisible) {
+        // Only check for new points if view has changed significantly
+        if (!this.lastViewportCheck || 
+           Math.abs(viewState.longitude - this.lastViewportCheck.longitude) > 0.01 ||
+           Math.abs(viewState.latitude - this.lastViewportCheck.latitude) > 0.01 ||
+           Math.abs(viewState.zoom - this.lastViewportCheck.zoom) > 0.2) {
           
           this._loadImagesForViewport(viewState);
           this.lastViewportCheck = {...viewState};
@@ -523,22 +573,22 @@ class DataMap {
     }
     
     // Handle text layer visibility (existing functionality)
-        if (this.pointTextLayer) {
+    if (this.pointTextLayer) {
       const textVisible = viewState.zoom >= this.pointTextMinZoom;
-            
+      
       if (textVisible !== this.pointTextLayer.props.visible) {
-              const updatedLayer = this.pointTextLayer.clone({
+        const updatedLayer = this.pointTextLayer.clone({
           visible: textVisible
-              });
-              
-              // Update layers array
-              const idx = this.layers.indexOf(this.pointTextLayer);
-              this.layers = [...this.layers.slice(0, idx), updatedLayer, ...this.layers.slice(idx + 1)];
-              this.deckgl.setProps({ layers: this.layers });
-              this.pointTextLayer = updatedLayer;
-            }
-          }
-        }
+        });
+        
+        // Update layers array
+        const idx = this.layers.indexOf(this.pointTextLayer);
+        this.layers = [...this.layers.slice(0, idx), updatedLayer, ...this.layers.slice(idx + 1)];
+        this.deckgl.setProps({ layers: this.layers });
+        this.pointTextLayer = updatedLayer;
+      }
+    }
+  }
   
   // Method to load images for the current viewport
   _loadImagesForViewport(viewState) {
@@ -551,11 +601,6 @@ class DataMap {
       this.container.clientWidth,
       this.container.clientHeight
     );
-    
-    // Keep track of which points have already had images loaded
-    if (!this.loadedImageIndices) {
-      this.loadedImageIndices = new Set();
-    }
     
     // Filter visible points by selected status if there's a selection active
     let pointsToConsider = visiblePoints;
@@ -575,123 +620,43 @@ class DataMap {
       // Mark these indices as loaded
       newPointsToLoad.forEach(idx => this.loadedImageIndices.add(idx));
       
-      // Update the image layer with the new visible indices
-      this._updateImageLayerData();
-    }
-  }
-  
-  // Helper to actually create the image layer (initial empty layer)
-  _createImageLayer() {
-    const { pointProps, sizeUnits, sizeScale, sizeMinPixels, sizeMaxPixels } = this.pointImageProps;
-    const pointImageField = this.pointImageField;
-    const defaultImageUrl = this.pointImageUrl;
-    
-    // Initialize empty data structure for image URLs
-    this.pointImages = [];
-    this.loadedImageIndices = new Set();
-    
-    // Border sizing - make images slightly smaller than points to create border effect
-    const borderSizeFactor = this.pointImageBorderSizeFactor || 0.85; // Use configured factor or default
-    
-    // Check if we have variable size points (marker_size_array)
-    const hasVariableSizes = pointProps.data.attributes.getRadius !== undefined;
-    
-    this.pointImageLayer = new deck.IconLayer({
-      id: 'pointImageLayer',
-      data: [], // Start with empty data array
-      pickable: true,
-      // Use the same position accessor as the point layer
-      getPosition: d => {
-        const idx = d.index * 2;
-        return [
-          pointProps.data.attributes.getPosition.value[idx],
-          pointProps.data.attributes.getPosition.value[idx + 1]
-        ];
-      },
-      // Icon settings for circular images
-      getIcon: d => {
-        return {
-          url: d.imageUrl,
-          width: 128,
-          height: 128,
-          mask: false  // Setting mask to false so the image shows properly
-        };
-      },
-      // Size settings - apply border effect by making images slightly smaller
-      // Handle both fixed size and dynamic size (marker_size_array) cases
-      getSize: hasVariableSizes ? 
-               (d => {
-                 // Get the radius directly from the point layer's radius array
-                 const radius = pointProps.data.attributes.getRadius.value[d.index];
-                 return radius * 2 * borderSizeFactor;
-               }) : 
-               (pointProps.getRadius === undefined ? 2 * borderSizeFactor : 
-                 (typeof pointProps.getRadius === 'function' ? 
-                   d => pointProps.getRadius(d.index) * 2 * borderSizeFactor : 
-                   pointProps.getRadius * 2 * borderSizeFactor)),
-      sizeUnits: sizeUnits,
-      sizeScale: sizeScale,
-      sizeMinPixels: sizeMinPixels * borderSizeFactor,
-      sizeMaxPixels: sizeMaxPixels * borderSizeFactor,
-      // Other properties
-      getColor: [255, 255, 255],
-      visible: false, // Start hidden, visibility will be updated in _handleLayerVisibilityOnZoom
-      updateTriggers: {
-        getSize: pointProps.updateTriggers?.getRadius || 0,
-        getIcon: 0 // We'll increment this if the image URLs change
-      },
-      loadOptions: {
-        image: {
-          crossOrigin: 'anonymous'
-        }
-      }
-    });
-    
-    this.layers.push(this.pointImageLayer);
-    this.layers.sort((a, b) => getLayerIndex(a) - getLayerIndex(b));
-    this.deckgl.setProps({ layers: [...this.layers] });
-    
-    console.log("Created initial image layer");
-  }
-  
-  // Method to update image layer data with loaded images
-  _updateImageLayerData() {
-    if (!this.pointImageLayer || !this.loadedImageIndices) return;
-    
-    const pointImageField = this.pointImageField;
-    const defaultImageUrl = this.pointImageUrl;
-    
-    // Build data array for loaded points
-    const imageData = Array.from(this.loadedImageIndices).map(index => {
-      // Get the image URL for this point
-      let imageUrl = defaultImageUrl;
-      if (pointImageField && this.metaData && this.metaData[pointImageField]) {
-        const nodeImage = this.metaData[pointImageField][index];
-        if (nodeImage) {
-          imageUrl = nodeImage;
-        }
-      }
+      // Update image URLs in our data array
+      const updatedData = [...this.pointImageLayer.props.data];
       
-      return {
-        index,
-        imageUrl
-      };
-    });
-    
-    // Update the layer with new data
-    const updatedImageLayer = this.pointImageLayer.clone({
-      data: imageData,
-      updateTriggers: {
-        ...this.pointImageLayer.props.updateTriggers,
-        getIcon: (this.pointImageLayer.props.updateTriggers.getIcon || 0) + 1
-      }
-    });
-    
-    // Update layers array
-    const idx = this.layers.indexOf(this.pointImageLayer);
-    this.layers = [...this.layers.slice(0, idx), updatedImageLayer, ...this.layers.slice(idx + 1)];
-    this.pointImageLayer = updatedImageLayer;
-    this.deckgl.setProps({ layers: this.layers });
+      newPointsToLoad.forEach(idx => {
+        // Get the image URL for this point
+        let imageUrl = this.pointImageUrl; // Default
+        
+        if (this.pointImageField && this.metaData && this.metaData[this.pointImageField]) {
+          const nodeImage = this.metaData[this.pointImageField][idx];
+          if (nodeImage) {
+            imageUrl = nodeImage;
+          }
+        }
+        
+        // Update the data entry
+        updatedData[idx] = {
+          ...updatedData[idx],
+          imageUrl: imageUrl,
+          isLoaded: true
+        };
+      });
+      
+      // Update the layer with the new data
+      const updatedImageLayer = this.pointImageLayer.clone({
+        data: updatedData,
+        updateTriggers: {
+          ...this.pointImageLayer.props.updateTriggers,
+          getIcon: (this.pointImageLayer.props.updateTriggers.getIcon || 0) + 1
+        }
+      });
+      
+      // Update layers array
+      const idx = this.layers.indexOf(this.pointImageLayer);
+      this.layers = [...this.layers.slice(0, idx), updatedImageLayer, ...this.layers.slice(idx + 1)];
+      this.pointImageLayer = updatedImageLayer;
+      this.deckgl.setProps({ layers: this.layers });
+    }
   }
 
   addMetaData(metaData, {
@@ -807,7 +772,7 @@ class DataMap {
 
     const sizeAdjust = 1/(1 + (Math.sqrt(selectedIndices.size) / Math.log2(this.selected.length)));
 
-    // Update regular point layer for borders/background
+    // Update regular point layer
     const updatedPointLayer = this.pointLayer.clone({
       data: {
         ...this.pointLayer.props.data,
@@ -818,9 +783,9 @@ class DataMap {
       },
       radiusMinPixels: hasSelectedIndices ? 2 * (this.pointRadiusMinPixels + sizeAdjust) : this.pointRadiusMinPixels,
       // Remove the grey border if images are visible
-      lineWidthMinPixels: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMinPixels,
-      lineWidthMaxPixels: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMaxPixels,
-      lineWidthScale: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthScale,
+      lineWidthMinPixels: (this.pointImageLayer && this.pointImageLayer.props.visible && !this.pointImageShowOutline) ? 0 : this.pointLineWidthMinPixels,
+      lineWidthMaxPixels: (this.pointImageLayer && this.pointImageLayer.props.visible && !this.pointImageShowOutline) ? 0 : this.pointLineWidthMaxPixels, 
+      lineWidthScale: (this.pointImageLayer && this.pointImageLayer.props.visible && !this.pointImageShowOutline) ? 0 : this.pointLineWidth,
       updateTriggers: {
         getFilterValue: this.updateTriggerCounter,
         radiusMinPixels: this.updateTriggerCounter,
@@ -832,31 +797,25 @@ class DataMap {
     this.pointLayer = updatedPointLayer;
 
     // Update image layer if it exists
-    if (this.pointImageLayer && this.imagesLoaded) {
+    if (this.pointImageLayer) {
+      // If selection active, update image visibility based on selected status
       if (hasSelectedIndices) {
-        // If selection active, filter image data to only show selected points
-        const visibleImageIndices = Array.from(selectedIndices).filter(index => this.loadedImageIndices.has(index));
-        
-        // Create a filtered data array
-        const imageData = visibleImageIndices.map(index => {
-          // Get the image URL for this point
-          let imageUrl = this.pointImageUrl;
-          if (this.pointImageField && this.metaData && this.metaData[this.pointImageField]) {
-            const nodeImage = this.metaData[this.pointImageField][index];
-            if (nodeImage) {
-              imageUrl = nodeImage;
-            }
+        // Clone the current data and hide unselected points' images
+        const updatedData = this.pointImageLayer.props.data.map((d, i) => {
+          // Only show the image if the point is selected
+          if (this.selected[i] <= 0) {
+            return {
+              ...d,
+              // Hide unselected points
+              imageUrl: null,
+              isLoaded: false
+            };
           }
-          
-          return {
-            index,
-            imageUrl
-          };
+          return d;
         });
         
-        // Update the layer with filtered data
         const updatedImageLayer = this.pointImageLayer.clone({
-          data: imageData,
+          data: updatedData,
           updateTriggers: {
             ...this.pointImageLayer.props.updateTriggers,
             getIcon: this.updateTriggerCounter
@@ -867,75 +826,58 @@ class DataMap {
         const imageIdx = this.layers.indexOf(this.pointImageLayer);
         this.layers = [...this.layers.slice(0, imageIdx), updatedImageLayer, ...this.layers.slice(imageIdx + 1)];
         this.pointImageLayer = updatedImageLayer;
-      } else {
-        // If no selection, restore all image points that were previously loaded
-        this._updateImageLayerData(); // This will recreate the full set of loaded images
-      }
-    }
-    
-    // Update text layer if it exists
-    if (this.pointTextLayer && this.metaData) {
-      if (hasSelectedIndices) {
-        // Filter text data to only show labels for selected points
-        const visibleTextIndices = Array.from(selectedIndices);
-        
-        // Create filtered text data
-        const textData = visibleTextIndices.map(index => {
-          const x = this.pointLayer.props.data.attributes.getPosition.value[index * 2];
-          const y = this.pointLayer.props.data.attributes.getPosition.value[index * 2 + 1];
-          
-          return {
-            position: [x, y],
-            text: this.metaData[this.pointTextField][index] || '',
-            index: index
-          };
-        });
-        
-        // Update the layer with filtered data
-        const updatedTextLayer = this.pointTextLayer.clone({
-          data: textData,
-          updateTriggers: {
-            ...this.pointTextLayer.props.updateTriggers,
-            getText: this.updateTriggerCounter
-          }
-        });
-        
-        // Update layers array
-        const textIdx = this.layers.indexOf(this.pointTextLayer);
-        this.layers = [...this.layers.slice(0, textIdx), updatedTextLayer, ...this.layers.slice(textIdx + 1)];
-        this.pointTextLayer = updatedTextLayer;
-      } else {
-        // If nothing is selected, restore all text labels
-        // We need to recreate the full data array
-        const textData = Array.from({length: this.selected.length}, (_, i) => {
-          const x = this.pointLayer.props.data.attributes.getPosition.value[i * 2];
-          const y = this.pointLayer.props.data.attributes.getPosition.value[i * 2 + 1];
-          
-          return {
-            position: [x, y],
-            text: this.metaData[this.pointTextField][i] || '',
-            index: i
-          };
-        });
-        
-        // Update the layer with all data
-        const updatedTextLayer = this.pointTextLayer.clone({
-          data: textData,
-          updateTriggers: {
-            ...this.pointTextLayer.props.updateTriggers,
-            getText: this.updateTriggerCounter
-          }
-        });
-        
-        // Update layers array
-        const textIdx = this.layers.indexOf(this.pointTextLayer);
-        this.layers = [...this.layers.slice(0, textIdx), updatedTextLayer, ...this.layers.slice(textIdx + 1)];
-        this.pointTextLayer = updatedTextLayer;
+        this.deckgl.setProps({ layers: this.layers });
+      } 
+      // If no selection, make sure images are consistent with loaded state
+      else if (this.pointImageLayer.props.visible) {
+        // Reload images for visible points
+        this._loadImagesForViewport(this.deckgl.viewState);
       }
     }
 
+    // Update text layer if it exists
+    if (this.pointTextLayer) {
+      if (hasSelectedIndices) {
+        // Update to show only selected points
+        const filteredData = [...this.pointTextLayer.props.data];
+        for (let i = 0; i < filteredData.length; i++) {
+          filteredData[i].visible = this.selected[i] > 0;
+        }
+        
+        const updatedTextLayer = this.pointTextLayer.clone({
+          data: filteredData,
+          updateTriggers: {
+            getPosition: this.updateTriggerCounter,
+            getText: this.updateTriggerCounter
+          }
+        });
+        
+        const idx = this.layers.indexOf(this.pointTextLayer);
+        this.layers = [...this.layers.slice(0, idx), updatedTextLayer, ...this.layers.slice(idx + 1)];
+        this.pointTextLayer = updatedTextLayer;
+      } else {
+        // Show all text
+        const updatedData = [...this.pointTextLayer.props.data];
+        for (let i = 0; i < updatedData.length; i++) {
+          updatedData[i].visible = true;
+        }
+        
+        const updatedTextLayer = this.pointTextLayer.clone({
+          data: updatedData,
+          updateTriggers: {
+            getPosition: this.updateTriggerCounter,
+            getText: this.updateTriggerCounter
+          }
+        });
+        
+        const idx = this.layers.indexOf(this.pointTextLayer);
+        this.layers = [...this.layers.slice(0, idx), updatedTextLayer, ...this.layers.slice(idx + 1)];
+        this.pointTextLayer = updatedTextLayer;
+      }
+    }
+    
     this.deckgl.setProps({
-      layers: this.layers
+      layers: [...this.layers]
     });
 
     // Update histogram, if any
