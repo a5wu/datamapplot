@@ -346,7 +346,7 @@ class DataMap {
 
     // Save the text field name for later use in filtering
     this.pointTextField = textField;
-    
+
     // Wait for font to load
     waitForFont(fontFamily);
 
@@ -404,7 +404,9 @@ class DataMap {
   addPointImages({
     pointImageMinZoom = 8,
     pointImageUrl = 'https://cdn.bsky.app/img/avatar/plain/did:plc:7l75ck5g4b5k6gxqaq5rejit/bafkreia2gyds76c6uk5szzdxvsfcvnm4nh5nvudchuu3tqc6nlkwetcjai@jpeg',
-    pointImageField = null  // Field in metadata for per-node URLs
+    pointImageField = null,  // Field in metadata for per-node URLs
+    pointImageBorderSizeFactor = 0.85,  // Controls border thickness (smaller = thicker border)
+    pointImageShowOutline = false  // Whether to show the grey outline around the colored border
   }) {
     if (!this.pointLayer) {
       console.warn("Point layer not initialized. Image layer will not be created.");
@@ -426,6 +428,8 @@ class DataMap {
     this.imagesLoaded = false;
     this.pointImageUrl = pointImageUrl;
     this.pointImageField = pointImageField;
+    this.pointImageBorderSizeFactor = pointImageBorderSizeFactor;
+    this.pointImageShowOutline = pointImageShowOutline;
     this.pointImageProps = {
       pointProps: pointProps,
       // Store other settings we'll need when creating the layer
@@ -486,10 +490,15 @@ class DataMap {
           this.layers = [...this.layers.slice(0, idx), updatedImageLayer, ...this.layers.slice(idx + 1)];
           this.pointImageLayer = updatedImageLayer;
           
-          // Toggle point layer visibility to be opposite of images
+          // Update point layer for border effect - keep visible but adjust size
           if (this.pointLayer) {
             const updatedPointLayer = this.pointLayer.clone({
-              visible: !imageVisible
+              visible: true, // Keep visible for border effect
+              // Remove the grey border based on user preference
+              lineWidthMinPixels: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMinPixels,
+              lineWidthMaxPixels: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMaxPixels,
+              lineWidthScale: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthScale,
+              // Keep other properties unchanged
             });
             const pointIdx = this.layers.indexOf(this.pointLayer);
             this.layers = [...this.layers.slice(0, pointIdx), updatedPointLayer, ...this.layers.slice(pointIdx + 1)];
@@ -581,6 +590,9 @@ class DataMap {
     this.pointImages = [];
     this.loadedImageIndices = new Set();
     
+    // Border sizing - make images slightly smaller than points to create border effect
+    const borderSizeFactor = this.pointImageBorderSizeFactor || 0.85; // Use configured factor or default
+    
     this.pointImageLayer = new deck.IconLayer({
       id: 'pointImageLayer',
       data: [], // Start with empty data array
@@ -602,15 +614,15 @@ class DataMap {
           mask: false  // Setting mask to false so the image shows properly
         };
       },
-      // Size settings
-      getSize: pointProps.getRadius === undefined ? 2 : 
+      // Size settings - apply border effect by making images slightly smaller
+      getSize: pointProps.getRadius === undefined ? 2 * borderSizeFactor : 
                (typeof pointProps.getRadius === 'function' ? 
-                 d => pointProps.getRadius(d.index) * 2 : 
-                 pointProps.getRadius * 2),
+                 d => pointProps.getRadius(d.index) * 2 * borderSizeFactor : 
+                 pointProps.getRadius * 2 * borderSizeFactor),
       sizeUnits: sizeUnits,
       sizeScale: sizeScale,
-      sizeMinPixels: sizeMinPixels,
-      sizeMaxPixels: sizeMaxPixels,
+      sizeMinPixels: sizeMinPixels * borderSizeFactor,
+      sizeMaxPixels: sizeMaxPixels * borderSizeFactor,
       // Other properties
       getColor: [255, 255, 255],
       visible: false, // Start hidden, visibility will be updated in _handleLayerVisibilityOnZoom
@@ -785,7 +797,7 @@ class DataMap {
 
     const sizeAdjust = 1/(1 + (Math.sqrt(selectedIndices.size) / Math.log2(this.selected.length)));
 
-    // Update regular point layer
+    // Update regular point layer for borders/background
     const updatedPointLayer = this.pointLayer.clone({
       data: {
         ...this.pointLayer.props.data,
@@ -795,6 +807,10 @@ class DataMap {
         }
       },
       radiusMinPixels: hasSelectedIndices ? 2 * (this.pointRadiusMinPixels + sizeAdjust) : this.pointRadiusMinPixels,
+      // Remove the grey border if images are visible
+      lineWidthMinPixels: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMinPixels,
+      lineWidthMaxPixels: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthMaxPixels,
+      lineWidthScale: (this.imagesLoaded && !this.pointImageShowOutline) ? 0 : this.pointLayer.props.lineWidthScale,
       updateTriggers: {
         getFilterValue: this.updateTriggerCounter,
         radiusMinPixels: this.updateTriggerCounter,
@@ -914,7 +930,7 @@ class DataMap {
     this.deckgl.setProps({
       layers: this.layers
     });
-    
+
     // Update histogram, if any
     if (this.histogramItem && itemId !== this.histogramItemId) {
       if (hasSelectedIndices) {

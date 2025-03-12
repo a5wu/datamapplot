@@ -974,6 +974,8 @@ def render_html(
     point_image_url=None,
     point_image_field=None,
     point_image_border_color=[255, 255, 255, 200],
+    point_image_border_size_factor=0.85,
+    point_image_show_outline=False,
     histogram_data=None,
     histogram_n_bins=20,
     histogram_group_datetime_by=None,
@@ -1236,6 +1238,12 @@ def render_html(
 
     point_image_border_color: list of float (optional, default=[255, 255, 255, 200])
         The color of the outline around point images.
+
+    point_image_border_size_factor: float (optional, default=0.85)
+        The factor to scale the point image border size.
+
+    point_image_show_outline: bool (optional, default=False)
+        Whether to show an outline around point images.
 
     histogram_data: list, pandas.Series, or None (optional, default=None)
         The data used to generate a histogram. The histogram data can be passed as a list or
@@ -1877,6 +1885,8 @@ def render_html(
         point_image_url=point_image_url,
         point_image_field=point_image_field,
         point_image_border_color=point_image_border_color,
+        point_image_border_size_factor=point_image_border_size_factor,
+        point_image_show_outline=point_image_show_outline,
         **dependencies_ctx,
     )
     return html_str
