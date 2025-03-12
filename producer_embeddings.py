@@ -29,18 +29,20 @@ except FileNotFoundError:
     np.save('./embeddings/producer_embeddings_2d.npy', embeddings_2d)
 
 producer_df = pd.read_parquet('./embeddings/producer_profiles_with_avatars.parquet')
+# Filter out rows without a handle
 producer_df['bsky_url'] = producer_df['did'].apply(lambda x: f"https://bsky.app/profile/{x}")
 
 # Define a list of image URLs to randomly assign
 image_urls = [
     # "https://inkcap.us-east.host.bsky.network/xrpc/com.atproto.sync.getBlob?did=did:plc:7l75ck5g4b5k6gxqaq5rejit&cid=bafkreia2gyds76c6uk5szzdxvsfcvnm4nh5nvudchuu3tqc6nlkwetcjai",
     # "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/ItsukushimaTorii7379.jpg/330px-ItsukushimaTorii7379.jpg"
+    # "https://cors-anywhere.herokuapp.com/https://cdn.bsky.app/img/avatar/plain/did:plc:5u54z2qgkq43dh2nzwzdbbhb/bafkreif2ng565gq22mobaq5olikueiux7qcpr6d62zrkbph42m65r7cekm@jpeg",
     "data:image/webp;base64,UklGRsoBAABXRUJQVlA4WAoAAAAQAAAAHwAAHwAAQUxQSEMAAAABDzD/ERGCVSRZjZZCwJOAFKQ9pCKBTy7O5eAgov8ToGrS7BKEArGCNUinDnkGP63A3b/roxn81CE3SKcKViAKgmYXAFZQOCBgAQAA8AYAnQEqIAAgAD7RXKhOKCUkIigKqQAaCWwAnRmmtufdpL2FXILIEzmhc/XvJQtPNIEoKlfj8PtNmNubbfOB4AD+y/U3yNkj55hzFuH8SwMkLxbcoZOHP/1vms+ePdPJczorqDFOP7+3TCB81On4zvUVAB/jsdoyunLLhpRVwBJcIuVcOrOvnec8EgVCV/UEo37YrnpMpJenqbaG64SmX+rt8rN8wZ7oKtU+Tkc9vKtvEP+8NpcqKPbMsPYbZAid/xTORJ+iSMn0o0yuQqC3HP52NzVvt4+YCV05srUHaNLik3/osimr5CYm0SOwlHqevmKjaKLZzAQA1NNOF6eCMPKzb/F7UfPar6idNzwlynC06WsN25sHsfl7xLaNTYYV4htHzXbyU1wrR8zq5tx+nAwn7ulmoL/gheuVdtJBCmBedAnCL8LsVA0KDffSWgM3PDCkO6supTL+iZZu3e7gAA==",
     "data:image/webp;base64,UklGRqYBAABXRUJQVlA4WAoAAAAQAAAAHwAAHwAAQUxQSEMAAAABDzD/ERGCVSRZjZZCwJOAFKQ9pCKBTy7O5eAgov8ToGrS7BKEArGCNUinDnkGP63A3b/roxn81CE3SKcKViAKgmYXAFZQOCA8AQAAkAcAnQEqIAAgAD7RWKFLqCUjIbAYDAEAGgliAHjSKBRgcbMoGHTZ/C6U22R4FShp721WeQWT4c5+vbu9lN49HS//wTaAAP5vY5TcklXVOoJJsafpB8xcl8amFOt9dG7kj0Ld1pY1VoLzkjhhIfXfIS1CxPwN1u2cnsUI3TAT4OhmZ+rL5fRhvRyIQexslgWT4/5t2c+XMSB3eEn0txyizc8fCjiZamGAXC6IdAtqh6K2RGOBdSrZ1bfOuoItE9Uxi5ZrJ6494h4jmQtfcrK/BzH8Fsp4zUTN/SwoKuc8N+izRkQljfTjMWpXaUfnrVVzjcjT9neUDEY5uBJ+IRTxF0RQ1w+PPEotKQBd+aWJZBhMtC5E+5paIdNPGizkR6IIVSrHBNMVcvlFLj5THpcayBjPvkXWUnAmmNAAAA=="
 ]
 
 # Make the first image URL rare (only 0.1% of the data)
-rare_image_probability = 0.1  # 0.1%
+rare_image_probability = 0.5  # 0.1%
 producer_df['profile_image_url'] = [
     image_urls[0] if random.random() < rare_image_probability else image_urls[1] 
     for _ in range(len(producer_df))
@@ -80,20 +82,20 @@ producer_communities = producer_communities.astype(str)
 
 follower_counts = producer_df['followers'].fillna(1).to_numpy()
 min_size = 3  # Minimum marker size
-max_size = 25  # Maximum marker size
+max_size = 100  # Maximum marker size
 log_followers = np.log1p(follower_counts)  # log(1+x) to handle zeros
 marker_size_array = min_size + (max_size - min_size) * (log_followers - log_followers.min()) / (log_followers.max() - log_followers.min())
 
 # Define hover text template for interactive visualization
 hover_text_template = """
 <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-    <p style="font-weight: 600; font-size: 14px; margin: 0 0 2px 0;">{hover_text}</p>
-    <p style="font-size: 14px; color: #666; margin: 0 0 8px 0;">@{handle}</p>
-    <p style="font-size: 14px; color: #4A4A4A; margin: 0 0 8px 0;">{description}</p>
-    <div style="display: flex; gap: 16px; font-size: 13px; color: #666;">
-        <span><b>{followers}</b> followers</span>
-        <span><b>{following}</b> following</span>
-        <span><b>{posts}</b> posts</span>
+    <p style="font-weight: 800; font-size: 16px; margin: 0 0 2px 0; color: #FFFFFF;">{hover_text}</p>
+    <p style="font-size: 14px; color: #64D2FF; font-weight: 600; margin: 0 0 8px 0;">@{handle}</p>
+    <p style="font-size: 14px; color: #E0E0E0; margin: 0 0 12px 0; font-style: italic;">{description}</p>
+    <div style="display: flex; gap: 16px; font-size: 13px; font-weight: 600; border-top: 1px solid #444; padding-top: 8px;">
+        <span style="color: #6FE792;"><b>{followers}</b> followers</span>
+        <span style="color: #FFB966;"><b>{following}</b> following</span>
+        <span style="color: #FF9ED2;"><b>{posts}</b> posts</span>
     </div>
 </div>
 """
@@ -123,6 +125,23 @@ plot = datamapplot.create_interactive_plot(
     point_image_field="profile_image_url",        # Use our base64-encoded images
     point_image_border_size_factor=0.85,          # Control border thickness (smaller = thicker)
     point_image_show_outline=False,               # Disable the grey outline for cleaner look
+    tooltip_css="""
+        position: absolute;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        font-size: 0.9em;
+        font-weight: 600;
+        color: #000000;
+        background-color: rgba(255, 255, 255, 0.95);
+        border-radius: 8px;
+        padding: 10px 14px;
+        margin-left: 15px;
+        max-width: 300px;
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+        pointer-events: none;
+        z-index: 1000;
+        transform: translateY(-50%);
+    }
+    """
 )
 
 # Print some basic statistics about the embeddings
