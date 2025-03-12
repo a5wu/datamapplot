@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect } from 'react';
 import ProfileImage from './components/ProfileImage';
-import './iframe-fix.css';
 
 // Type definition for the node data
 interface NodeData {
@@ -55,148 +54,85 @@ export default function Home() {
   }, []);
 
   return (
-    <div style={{ 
-      display: 'flex', 
-      flexDirection: 'column', 
-      height: '100vh', 
-      width: '100%',
-      overflow: 'hidden'
-    }}>
-      {/* Debug bar */}
-      <div style={{ 
-        padding: '8px', 
-        backgroundColor: '#f3f4f6', 
-        fontSize: '12px', 
-        color: '#4b5563'
-      }}>
+    // Using grid instead of flex for more precise layout control
+    <div className="grid grid-rows-[auto_1fr] h-screen w-full">
+      {/* Debug panel - can be removed in production */}
+      <div className="bg-gray-100 p-2 text-xs text-gray-600">
         <span>Debug:</span> <span>{debugMsg}</span>
       </div>
       
-      {/* Main content - two column layout */}
-      <div style={{ 
-        display: 'grid',
-        gridTemplateColumns: '2fr 1fr',
-        flex: '1',
-        overflow: 'hidden',
-        width: '100%',
-        height: '100%'
-      }}>
-        {/* Visualization column */}
-        <div className="iframe-container">
+      {/* Main content area - takes remaining height */}
+      <div className="grid grid-cols-12 h-full">
+        {/* Left column - visualization (8/12 columns) */}
+        <div className="col-span-8 relative h-full overflow-hidden">
           <iframe 
             src="/producer_embeddings.html" 
+            className="absolute inset-0 w-full h-full"
             title="Bluesky Atlas Visualization"
             loading="eager"
             allow="fullscreen"
-            style={{ width: '100%', height: '100%', border: 'none' }}
+            style={{ border: 'none', display: 'block' }}
           />
         </div>
         
-        {/* Sidebar column */}
-        <div style={{ 
-          height: '100%', 
-          backgroundColor: 'white', 
-          borderLeft: '1px solid #e5e7eb',
-          overflow: 'auto'
-        }}>
+        {/* Right column - sidebar (4/12 columns) */}
+        <div className="col-span-4 bg-white border-l border-gray-200 overflow-y-auto">
           {selectedNode ? (
-            <div style={{ padding: '16px' }}>
-              <div style={{ marginBottom: '16px', display: 'flex', alignItems: 'center' }}>
+            <div className="p-4">
+              <div className="mb-4 flex items-center">
                 <ProfileImage 
                   src={selectedNode.profile_image_url} 
                   alt={selectedNode.display_name}
                   className="w-16 h-16 rounded-full mr-3"
                 />
                 <div>
-                  <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>
-                    {selectedNode.display_name}
-                  </h2>
+                  <h2 className="text-xl font-bold">{selectedNode.display_name}</h2>
                   <a 
                     href={selectedNode.bsky_url}
                     target="_blank"
                     rel="noopener noreferrer" 
-                    style={{ color: '#3b82f6', textDecoration: 'none' }}
-                    onMouseOver={(e) => e.currentTarget.style.textDecoration = 'underline'}
-                    onMouseOut={(e) => e.currentTarget.style.textDecoration = 'none'}
+                    className="text-blue-500 hover:underline"
                   >
                     @{selectedNode.handle}
                   </a>
                 </div>
               </div>
               
-              <p style={{ color: '#4b5563', marginBottom: '16px' }}>
-                {selectedNode.description}
-              </p>
+              <p className="text-gray-700 mb-4">{selectedNode.description}</p>
               
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px' }}>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontWeight: 'bold' }}>
-                    {selectedNode.followers?.toLocaleString() || '0'}
-                  </div>
-                  <div style={{ color: '#6b7280' }}>Followers</div>
+              <div className="flex justify-between text-sm">
+                <div className="text-center">
+                  <div className="font-bold">{selectedNode.followers?.toLocaleString() || '0'}</div>
+                  <div className="text-gray-500">Followers</div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontWeight: 'bold' }}>
-                    {selectedNode.following?.toLocaleString() || '0'}
-                  </div>
-                  <div style={{ color: '#6b7280' }}>Following</div>
+                <div className="text-center">
+                  <div className="font-bold">{selectedNode.following?.toLocaleString() || '0'}</div>
+                  <div className="text-gray-500">Following</div>
                 </div>
-                <div style={{ textAlign: 'center' }}>
-                  <div style={{ fontWeight: 'bold' }}>
-                    {selectedNode.posts?.toLocaleString() || '0'}
-                  </div>
-                  <div style={{ color: '#6b7280' }}>Posts</div>
+                <div className="text-center">
+                  <div className="font-bold">{selectedNode.posts?.toLocaleString() || '0'}</div>
+                  <div className="text-gray-500">Posts</div>
                 </div>
               </div>
               
-              <div style={{ marginTop: '16px' }}>
+              <div className="mt-4">
                 <a 
                   href={selectedNode.bsky_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  style={{
-                    display: 'block',
-                    width: '100%',
-                    backgroundColor: '#3b82f6',
-                    color: 'white',
-                    textAlign: 'center',
-                    padding: '8px 16px',
-                    borderRadius: '4px',
-                    textDecoration: 'none',
-                  }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#2563eb'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = '#3b82f6'}
+                  className="block w-full bg-blue-500 text-white text-center py-2 px-4 rounded hover:bg-blue-600"
                 >
                   View Profile
                 </a>
               </div>
             </div>
           ) : (
-            <div style={{ 
-              padding: '16px', 
-              color: '#6b7280', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              alignItems: 'center', 
-              justifyContent: 'center',
-              height: '100%' 
-            }}>
-              <div style={{ 
-                height: '48px', 
-                width: '48px', 
-                marginBottom: '12px', 
-                borderRadius: '50%', 
-                backgroundColor: '#dbeafe', 
-                color: '#3b82f6', 
-                display: 'flex', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                fontSize: '20px', 
-                fontWeight: 'bold' 
-              }}>
+            <div className="p-4 text-gray-500 flex flex-col items-center justify-center h-full">
+              {/* Replacing with a simpler icon */}
+              <div className="h-12 w-12 mb-3 rounded-full bg-blue-100 text-blue-500 flex items-center justify-center text-xl font-bold">
                 i
               </div>
-              <p style={{ textAlign: 'center' }}>
+              <p className="text-center">
                 Click on a node in the visualization to view details about that user.
               </p>
             </div>

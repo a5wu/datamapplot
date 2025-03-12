@@ -27,31 +27,17 @@ html, body, #__next {
   overflow: hidden;
 }
 
-/* Force iframe to take full size */
+/* Make sure iframe has proper dimensions */
 iframe {
-  width: 100% !important;
-  height: 100% !important;
-  min-width: 100% !important;
-  min-height: 100% !important;
-  border: none !important;
-  margin: 0 !important;
-  padding: 0 !important;
-  display: block !important;
-}
-
-/* Visualization container */
-.viz-container {
-  position: relative !important;
-  height: 100% !important;
-  width: 100% !important;
-  overflow: hidden !important;
-}
-
-/* Fix layout structure */
-.main-layout {
-  display: grid !important;
-  grid-template-columns: 2fr 1fr !important;
-  width: 100% !important;
-  height: 100% !important;
-  overflow: hidden !important;
+  /* position: fixed; */
+  /* top: 0px;
+  bottom: 0px;
+  left: 0px; */
+  /* width: 80%; */
+  /* border: none; */
+  /* margin: 0; */
+  /* padding: 0; */
+  /* overflow: hidden; */
+  z-index: 0;
+  /* height: 100%; */
 }
