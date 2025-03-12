@@ -100,14 +100,51 @@ hover_text_template = """
 </div>
 """
 
+tooltip_css = """
+    position: absolute;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: #000000;
+    background-color: rgba(255, 255, 255, 0.95);
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-left: 15px;
+    max-width: 300px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    pointer-events: none;
+    z-index: 1000;
+    transform: translateY(-50%);
+}
+"""
+
 # Create the plot
 plot = datamapplot.create_interactive_plot(
     embeddings_2d, 
     producer_communities,
     hover_text=producer_df['display_name'].to_list(),
-    extra_point_data=producer_df[['handle','description', 'followers', 'following', 'bsky_url', 'posts', 'profile_image_url']].fillna(''),
+    extra_point_data=producer_df[['did','handle','description', 'followers', 'following', 'bsky_url', 'posts', 'profile_image_url']].fillna(''),
     hover_text_html_template=hover_text_template,
-    on_click="window.open(hoverData.bsky_url[index], '_blank')",
+    on_click="""
+        // Extract only the data for this specific node
+        const nodeData = {{
+            did: hoverData.did[index],
+            handle: hoverData.handle[index],
+            display_name: hoverData.hover_text[index],
+            description: hoverData.description[index],
+            followers: hoverData.followers[index],
+            following: hoverData.following[index],
+            posts: hoverData.posts[index],
+            bsky_url: hoverData.bsky_url[index],
+            profile_image_url: hoverData.profile_image_url[index]
+        }};
+        
+        // Add debug message to confirm this code is executing
+        console.log("Sending node data to parent:", nodeData);
+        
+        // Send only this node's data to the parent
+        window.parent.postMessage({{type: 'node_click', data: nodeData}}, '*');
+    """,
     enable_search=True,
     search_field="description",
     background_color="#000000",
@@ -125,27 +162,16 @@ plot = datamapplot.create_interactive_plot(
     point_image_field="profile_image_url",        # Use our base64-encoded images
     point_image_border_size_factor=0.85,          # Control border thickness (smaller = thicker)
     point_image_show_outline=False,               # Disable the grey outline for cleaner look
-    tooltip_css="""
-        position: absolute;
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        font-size: 0.9em;
-        font-weight: 600;
-        color: #000000;
-        background-color: rgba(255, 255, 255, 0.95);
-        border-radius: 8px;
-        padding: 10px 14px;
-        margin-left: 15px;
-        max-width: 300px;
-        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
-        pointer-events: none;
-        z-index: 1000;
-        transform: translateY(-50%);
-    }
-    """
+    tooltip_css=tooltip_css
 )
 
 # Print some basic statistics about the embeddings
 print(f"Original embedding shape: {producer_embeddings.shape}")
 print(f"2D embedding shape: {embeddings_2d.shape}")
 print(f"Number of posts: {len(producer_embeddings)}")
+# Save the plot to the original location
 plot.save('producer_embeddings.html')
+
+# Also save it to the public directory for Next.js to serve
+plot.save('bluesky-atlas/public/producer_embeddings.html')
+

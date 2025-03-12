@@ -1,0 +1,57 @@
+@import "tailwindcss";
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-rgb));
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+} 
+
+html, body, #__next {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+}
+
+/* Force iframe to take full size */
+iframe {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 100% !important;
+  min-height: 100% !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  display: block !important;
+}
+
+/* Visualization container */
+.viz-container {
+  position: relative !important;
+  height: 100% !important;
+  width: 100% !important;
+  overflow: hidden !important;
+}
+
+/* Fix layout structure */
+.main-layout {
+  display: grid !important;
+  grid-template-columns: 2fr 1fr !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}

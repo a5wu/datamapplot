@@ -1,0 +1,29 @@
+/* Force iframe to take full dimensions */
+iframe {
+  width: 100% !important;
+  height: 100% !important;
+  min-width: 100% !important;
+  min-height: 100% !important;
+  border: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  display: block !important;
+}
+
+/* Make container position relative for absolute positioning */
+.iframe-container {
+  position: relative !important;
+  width: 100% !important;
+  height: 100% !important;
+  overflow: hidden !important;
+}
+
+/* Absolutely position the iframe to fill container */
+.iframe-container iframe {
+  position: absolute !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+} 
