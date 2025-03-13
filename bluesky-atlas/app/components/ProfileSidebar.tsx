@@ -231,9 +231,21 @@ export default function ProfileSidebar({ selectedNode }: ProfileSidebarProps) {
     fetchFollowing(selectedNode.did, followingCursor);
   };
   
-  // Track tab changes
+  // Track tab changes and load data for the selected tab if needed
   const handleTabChange = (tabId: string) => {
     setActiveTabId(tabId);
+    
+    // Only fetch data if we don't have any data for this tab yet and the node is selected
+    if (!selectedNode) return;
+    const { did } = selectedNode;
+    
+    if (tabId === 'posts' && posts.length === 0 && !isPostsLoading) {
+      fetchPosts(did);
+    } else if (tabId === 'followers' && followers.length === 0 && !isFollowersLoading) {
+      fetchFollowers(did);
+    } else if (tabId === 'following' && following.length === 0 && !isFollowingLoading) {
+      fetchFollowing(did);
+    }
   };
   
   // Effect to fetch data when selectedNode changes
@@ -277,12 +289,16 @@ export default function ProfileSidebar({ selectedNode }: ProfileSidebarProps) {
       })
       .finally(() => setIsProfileLoading(false));
     
-    // Fetch initial data for each tab
-    fetchPosts(did);
-    fetchFollowers(did);
-    fetchFollowing(did);
+    // Only fetch data for the active tab initially
+    if (activeTabId === 'posts') {
+      fetchPosts(did);
+    } else if (activeTabId === 'followers') {
+      fetchFollowers(did);
+    } else if (activeTabId === 'following') {
+      fetchFollowing(did);
+    }
     
-  }, [selectedNode]);
+  }, [selectedNode]); // Remove activeTabId from dependency array
   
   // If no node is selected, show the instruction message
   if (!selectedNode) {
