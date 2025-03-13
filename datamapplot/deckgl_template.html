@@ -712,7 +712,7 @@
           /* Point Image Layer */
           datamap.addPointImages({
             pointImageMinZoom: {{ point_image_min_zoom }},
-            pointImageUrl: "{{ point_image_url or 'https://i.imgur.com/SmYfo2m.jpeg' }}",
+            pointImageUrl: "{{ point_image_url }}",
             {% if point_image_field %}pointImageField: "{{ point_image_field }}",{% endif %}
             {% if point_image_border_size_factor %}pointImageBorderSizeFactor: {{ point_image_border_size_factor }},{% endif %}
             pointImageShowOutline: {{ point_image_show_outline|default(false)|lower }}

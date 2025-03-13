@@ -118,6 +118,80 @@ tooltip_css = """
 }
 """
 
+# Define custom CSS as a variable
+custom_css = """
+    /* Elegant search bar styling */
+    #search-container {
+        position: absolute;
+        top: 16px;
+        left: 16px;
+        width: 240px;
+        z-index: 10;
+        background: transparent;
+        box-shadow: none;
+    }
+    
+    #text-search {
+        width: 100%;
+        padding: 8px 12px 8px 36px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        background-color: rgba(30, 30, 30, 0.6);
+        color: rgba(255, 255, 255, 0.9);
+        font-size: 14px;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        transition: all 0.2s ease;
+        backdrop-filter: blur(4px);
+    }
+    
+    #text-search:focus {
+        background-color: rgba(40, 40, 40, 0.8);
+        border-color: rgba(100, 210, 255, 0.5);
+        box-shadow: 0 0 0 2px rgba(100, 210, 255, 0.2);
+        outline: none;
+    }
+    
+    #text-search::placeholder {
+        color: rgba(200, 200, 200, 0.6);
+    }
+    
+    /* Add search icon */
+    #search-container::before {
+        content: '';
+        position: absolute;
+        left: 12px;
+        top: 50%;
+        transform: translateY(-50%);
+        width: 16px;
+        height: 16px;
+        background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='rgba(200, 200, 200, 0.8)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Ccircle cx='11' cy='11' r='8'%3E%3C/circle%3E%3Cline x1='21' y1='21' x2='16.65' y2='16.65'%3E%3C/line%3E%3C/svg%3E");
+        background-repeat: no-repeat;
+        background-position: center;
+        pointer-events: none;
+        z-index: 15;
+    }
+    
+    /* Style the container box that contains the search */
+    #search-container.container-box {
+        background: transparent;
+        border: none;
+        padding: 0;
+        margin: 0;
+        box-shadow: none;
+    }
+"""
+
+# Define custom JS as a variable
+custom_js = """
+    // Set a more descriptive placeholder for the search box
+    document.addEventListener('DOMContentLoaded', function() {
+        const searchInput = document.getElementById('text-search');
+        if (searchInput) {
+            searchInput.placeholder = 'Search user profiles...';
+        }
+    });
+"""
+
 # Create the plot
 plot = datamapplot.create_interactive_plot(
     embeddings_2d, 
@@ -148,6 +222,8 @@ plot = datamapplot.create_interactive_plot(
     enable_search=True,
     search_field="description",
     background_color="#000000",
+    custom_css=custom_css,
+    custom_js=custom_js,
     marker_size_array=marker_size_array,
     point_radius_min_pixels=0.2,                  # Minimum dot size
     point_radius_max_pixels=16,                   # Maximum dot size
@@ -174,4 +250,3 @@ plot.save('producer_embeddings.html')
 
 # Also save it to the public directory for Next.js to serve
 plot.save('bluesky-atlas/public/producer_embeddings.html')
-
